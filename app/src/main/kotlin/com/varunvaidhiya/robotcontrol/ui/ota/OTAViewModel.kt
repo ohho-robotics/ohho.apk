@@ -14,7 +14,7 @@ import javax.inject.Inject
  * ViewModel for the OTA Update screen.
  *
  * Exposes OTA status StateFlows from RobotRepository and delegates
- * /ota/* service calls (check / apply_workspace / apply_models / rollback_workspace).
+ * OTA service calls (check, apply_workspace, apply_models, rollback_workspace).
  */
 @HiltViewModel
 class OTAViewModel @Inject constructor(

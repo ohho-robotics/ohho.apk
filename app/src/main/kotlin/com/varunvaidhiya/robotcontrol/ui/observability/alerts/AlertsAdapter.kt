@@ -35,7 +35,7 @@ class AlertsAdapter(private val onSilence: (AmAlert) -> Unit) :
             else       -> Color.parseColor("#00E5FF")
         }
         b.chipSeverity.setTextColor(sevColor)
-        b.chipSeverity.setStrokeColor(android.content.res.ColorStateList.valueOf(sevColor))
+        b.chipSeverity.chipStrokeColor = android.content.res.ColorStateList.valueOf(sevColor)
 
         b.btnSilence.text = if (isSilenced) "SILENCED" else "SILENCE 4H"
         b.btnSilence.alpha = if (isSilenced) 0.5f else 1.0f

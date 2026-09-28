@@ -21,6 +21,11 @@ import javax.inject.Singleton
 @Singleton
 class RobotRepository @Inject constructor() {
 
+    companion object {
+        /** ROSBridge WebSocket URL opened by [connect]. */
+        fun rosBridgeUrl(ip: String, port: Int): String = "ws://$ip:$port"
+    }
+
     private var rosManager: ROSBridgeManager? = null
 
     // ── Connection ─────────────────────────────────────────────────────────────
@@ -102,9 +107,9 @@ class RobotRepository @Inject constructor() {
     // ── Public API ─────────────────────────────────────────────────────────────
 
     fun connect(ip: String = Constants.DEFAULT_ROBOT_IP, port: Int = Constants.DEFAULT_ROSBRIDGE_PORT) {
-        _robotStatus.value = _robotStatus.value.copy(ipAddress = ip)
+        _robotStatus.value = _robotStatus.value.copy(ipAddress = ip, port = port)
         rosManager?.disconnect()  // clean up previous manager if any
-        rosManager = ROSBridgeManager("ws://$ip:$port", rosListener)
+        rosManager = ROSBridgeManager(rosBridgeUrl(ip, port), rosListener)
         rosManager?.connect()
         _connectionState.value = ROSBridgeManager.ConnectionState.CONNECTING
     }

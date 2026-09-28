@@ -123,7 +123,7 @@ class HealthFragment : Fragment() {
         val color = metricColor(value, 80.0, 95.0)
         bar.progress = value.coerceIn(0.0, 100.0).toInt()
         bar.progressTintList = ColorStateList.valueOf(color)
-        label.text = "%.0f$suffix".format(value)
+        label.text = "%.0f".format(value) + suffix
         label.setTextColor(color)
     }
 
@@ -131,7 +131,7 @@ class HealthFragment : Fragment() {
         val color = if (value >= 95) colorErr else if (value >= 85) colorWarn else baseColor
         bar.progress = value.coerceIn(0.0, 100.0).toInt()
         bar.progressTintList = ColorStateList.valueOf(color)
-        label.text = "%.0f$suffix".format(value)
+        label.text = "%.0f".format(value) + suffix
         label.setTextColor(color)
     }
 

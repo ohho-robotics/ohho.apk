@@ -3,6 +3,7 @@ package com.varunvaidhiya.robotcontrol
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import androidx.activity.viewModels
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.view.ViewCompat
@@ -11,6 +12,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.navigation.fragment.NavHostFragment
 import androidx.navigation.ui.setupWithNavController
 import com.varunvaidhiya.robotcontrol.databinding.ActivityMainBinding
+import com.varunvaidhiya.robotcontrol.ui.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import timber.log.Timber
 import java.text.SimpleDateFormat
@@ -21,6 +23,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private val mainViewModel: MainViewModel by viewModels()
     private val timeHandler = Handler(Looper.getMainLooper())
     private val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
 
@@ -89,7 +92,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         updateTime()
-        Timber.i("MainActivity initialized")
+        Timber.i("MainActivity initialized, ROSBridge ${mainViewModel.connectionState.value}")
     }
 
     private fun updateTime() {
