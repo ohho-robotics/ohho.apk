@@ -30,6 +30,10 @@ class MjpegView @JvmOverloads constructor(
     private var connection: HttpURLConnection? = null
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
+    /** Called once on the main thread after the first decoded frame. */
+    var frameListener: (() -> Unit)? = null
+    private var announcedFrame = false
+
     private var currentBitmap: Bitmap? = null
     private val srcRect = Rect()
     private val dstRect = Rect()
@@ -49,6 +53,7 @@ class MjpegView @JvmOverloads constructor(
         stopStream()
         streamUrl = url
         isStreaming = true
+        announcedFrame = false
         
         streamJob = scope.launch {
             var conn: HttpURLConnection? = null
@@ -67,6 +72,10 @@ class MjpegView @JvmOverloads constructor(
                     val frame = readMjpegFrame(inputStream)
                     if (frame != null) {
                         currentBitmap = frame
+                        if (!announcedFrame) {
+                            announcedFrame = true
+                            post { frameListener?.invoke() }
+                        }
                         postInvalidate()
                     } else if (!isActive) {
                         break

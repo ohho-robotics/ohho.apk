@@ -85,9 +85,16 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
                 launch {
                     cameraViewModel.streamUrl.collectLatest { url ->
+                        binding.textLiveIndicator.text = "NO FEED"
+                        binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                         if (url.isNotEmpty()) {
+                            binding.mjpegView.frameListener = {
+                                binding.textLiveIndicator.text = "● LIVE"
+                                binding.textLiveIndicator.setTextColor(Color.parseColor("#FF4444"))
+                            }
                             binding.mjpegView.startStream(url)
                         } else {
+                            binding.mjpegView.frameListener = null
                             binding.mjpegView.stopStream()
                         }
                     }

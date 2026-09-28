@@ -50,6 +50,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     private val colorErr  = Color.parseColor("#FF4444")
     private val colorCyan = Color.parseColor("#00E5FF")
     private val colorCyan2= Color.parseColor("#80F0FF")
+    private var endpointLabel = ""
 
     override fun inflateBinding(inflater: LayoutInflater, container: ViewGroup?): FragmentHomeBinding =
         FragmentHomeBinding.inflate(inflater, container, false)
@@ -70,8 +71,13 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                 }
                 launch {
                     viewModel.robotStatus.collectLatest { status ->
-                        if (status.ipAddress.isNotEmpty()) {
-                            binding.homeStatusText.text = "SYS: ONLINE · ${status.ipAddress}:9090"
+                        endpointLabel = if (status.ipAddress.isNotEmpty()) {
+                            "${status.ipAddress}:${status.port}"
+                        } else {
+                            ""
+                        }
+                        if (viewModel.connectionState.value == ROSBridgeManager.ConnectionState.CONNECTED) {
+                            binding.homeStatusText.text = onlineText()
                         }
                     }
                 }
@@ -79,21 +85,22 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         }
     }
 
+    private fun onlineText(): String =
+        if (endpointLabel.isEmpty()) "SYS: ONLINE" else "SYS: ONLINE · $endpointLabel"
+
     private fun updateConnectionRow(state: ROSBridgeManager.ConnectionState) {
         when (state) {
             ROSBridgeManager.ConnectionState.CONNECTED -> {
                 binding.homeStatusDot.setBackgroundResource(R.drawable.shape_circle_green)
-                binding.homeRosNodes.text = "14 ROS nodes"
+                binding.homeStatusText.text = onlineText()
             }
             ROSBridgeManager.ConnectionState.CONNECTING -> {
                 binding.homeStatusDot.setBackgroundResource(R.drawable.shape_circle_orange)
                 binding.homeStatusText.text = "SYS: CONNECTING…"
-                binding.homeRosNodes.text = "-- ROS nodes"
             }
             else -> {
                 binding.homeStatusDot.setBackgroundResource(R.drawable.shape_circle_red)
                 binding.homeStatusText.text = "SYS: OFFLINE"
-                binding.homeRosNodes.text = "-- ROS nodes"
             }
         }
     }
