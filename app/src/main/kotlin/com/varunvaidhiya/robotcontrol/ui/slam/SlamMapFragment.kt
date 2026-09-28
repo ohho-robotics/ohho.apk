@@ -32,7 +32,8 @@ class SlamMapFragment : BaseFragment<FragmentSlamMapBinding>() {
 
     private fun fadeOutHint() {
         binding.textZoomHint.postDelayed({
-            ObjectAnimator.ofFloat(binding.textZoomHint, "alpha", 1f, 0f).apply {
+            val hint = _binding?.textZoomHint ?: return@postDelayed
+            ObjectAnimator.ofFloat(hint, "alpha", 1f, 0f).apply {
                 duration = 1200
                 start()
             }

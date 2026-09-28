@@ -101,7 +101,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     private fun startSimulation() {
         val tick = object : Runnable {
             override fun run() {
-                if (!isAdded) return
+                if (!isAdded || _binding == null) return
                 tickMetrics()
                 renderMetrics()
                 handler.postDelayed(this, 750L)

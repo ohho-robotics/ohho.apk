@@ -9,7 +9,8 @@
     <LinearLayout
         android:id="@+id/hud_status_bar"
         android:layout_width="0dp"
-        android:layout_height="44dp"
+        android:layout_height="wrap_content"
+        android:minHeight="44dp"
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:paddingStart="10dp"
@@ -125,7 +126,7 @@
         app:layout_constraintEnd_toEndOf="parent" />
 
     <!-- ── Bottom Navigation ──────────────────────────────────────── -->
-    <com.google.android.material.bottomnavigation.BottomNavigationView
+    <com.varunvaidhiya.robotcontrol.ui.views.OmniBottomNavigationView
         android:id="@+id/nav_view"
         android:layout_width="0dp"
         android:layout_height="50dp"
