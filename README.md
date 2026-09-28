@@ -43,13 +43,13 @@ Not in this repository, and not claimed as working here:
 
 ## Screenshots
 
-Taken on an API 35 emulator from this tree, with no robot on the network. Home shows demo metrics and a connect attempt. Dashboard shows **NO FEED**.
+API 35 emulator, no robot. The socket shows online because a WebSocket listener on the host accepted `ws://10.0.2.2:9090`. Home metrics are labelled demo data. The camera has no frame.
 
-![Home, demo metrics, ROSBridge connecting](docs/screenshots/home.png)
+![Home on an emulator: SYS ONLINE, DEMO DATA banner on the simulated metrics](docs/screenshots/home.png)
 
-![Dashboard, no camera frame](docs/screenshots/dashboard.png)
+![Dashboard on an emulator: NO FEED, motor tiles labelled demo](docs/screenshots/dashboard.png)
 
-![Settings, saved robot address](docs/screenshots/settings.png)
+![Settings on an emulator: robot IP 10.0.2.2 and ROSBridge port 9090](docs/screenshots/settings.png)
 
 ## Navigation
 
