@@ -5,10 +5,11 @@ Connects over ROSBridge WebSocket (default `ws://192.168.1.100:9090`) and provid
 robot control, 3D visualisation, real-time mapping, and natural-language AI mission control.
 
 <p align="left">
-  <img src="https://img.shields.io/badge/Android-SDK_24+-brightgreen"/>
-  <img src="https://img.shields.io/badge/Kotlin-2.1.0-purple"/>
-  <img src="https://img.shields.io/badge/SceneView-4.8.0-blue"/>
-  <img src="https://img.shields.io/badge/Hilt-DI-orange"/>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache-2.0"/></a>
+  <img src="https://img.shields.io/badge/Android-SDK_24+-brightgreen" alt="Android min SDK 24"/>
+  <img src="https://img.shields.io/badge/Kotlin-2.1.0-purple" alt="Kotlin 2.1.0"/>
+  <img src="https://img.shields.io/badge/SceneView-4.8.0-blue" alt="SceneView 4.8.0"/>
+  <img src="https://img.shields.io/badge/Hilt-DI-orange" alt="Hilt"/>
 </p>
 
 ---
@@ -289,7 +290,9 @@ All topic and service names live in `utils/Constants.kt`.
 
 ## License
 
-MIT
+[Apache License 2.0](LICENSE).
+
+No third-party source is vendored in this repository (there is no Meta XR SDK tree or other copied SDK). Dependencies are declared in `app/build.gradle.kts` and keep their own licenses. The Gradle wrapper jar under `gradle/wrapper/` stays under the Gradle wrapper's license.
 
 ## Contact
 
