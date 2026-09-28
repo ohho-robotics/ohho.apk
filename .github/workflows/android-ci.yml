@@ -17,14 +17,16 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install SDK packages
-        run: sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-
-      - name: Point Gradle at the SDK
-        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+      - name: Install Android SDK packages
+        run: |
+          set -euo pipefail
+          if [ -z "${ANDROID_SDK_ROOT:-}" ]; then
+            echo "ANDROID_SDK_ROOT is not set on this runner" >&2
+            exit 1
+          fi
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
 
       - name: Assemble debug APK and run unit tests
         run: chmod +x ./gradlew && ./gradlew assembleDebug test --stacktrace
