@@ -17,16 +17,24 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      - name: Install Android SDK packages
+      - name: Install Android SDK
         run: |
           set -euo pipefail
-          if [ -z "${ANDROID_SDK_ROOT:-}" ]; then
-            echo "ANDROID_SDK_ROOT is not set on this runner" >&2
-            exit 1
-          fi
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          echo "sdk.dir=${ANDROID_SDK_ROOT}" > local.properties
+          SDK_ROOT="${HOME}/android-sdk"
+          mkdir -p "${SDK_ROOT}/cmdline-tools"
+          curl -fL --retry 3 -o /tmp/cmdline-tools.zip \
+            https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip
+          rm -rf /tmp/cmdline-tools
+          unzip -q /tmp/cmdline-tools.zip -d /tmp/cmdline-tools
+          rm -rf "${SDK_ROOT}/cmdline-tools/latest"
+          mv /tmp/cmdline-tools/cmdline-tools "${SDK_ROOT}/cmdline-tools/latest"
+          export PATH="${SDK_ROOT}/cmdline-tools/latest/bin:${PATH}"
+          yes | sdkmanager --sdk_root="${SDK_ROOT}" --licenses >/dev/null || true
+          sdkmanager --sdk_root="${SDK_ROOT}" \
+            "platforms;android-35" "build-tools;35.0.0"
+          echo "sdk.dir=${SDK_ROOT}" > local.properties
+          echo "ANDROID_HOME=${SDK_ROOT}" >> "${GITHUB_ENV}"
+          echo "ANDROID_SDK_ROOT=${SDK_ROOT}" >> "${GITHUB_ENV}"
 
       - name: Assemble debug APK and run unit tests
         run: chmod +x ./gradlew && ./gradlew assembleDebug test --stacktrace
