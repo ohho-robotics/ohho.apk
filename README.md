@@ -22,7 +22,7 @@ The license badge matches `LICENSE` (Apache-2.0). CI runs `./gradlew assembleDeb
 | Home battery, Pi, workstation, and model cards | **Demo data.** `HomeFragment` advances them on a timer. They are not `/diagnostics` and not a detected hardware inventory. The screen says so. |
 | Home joint readout and empty 3D pane | Placeholders. `robot.glb` is not in this repo, and this screen does not load one. |
 | Dashboard camera | MJPEG from `http://<robot-ip>:8080/stream?topic=/camera/front/image_raw` only after the socket reports connected. The badge stays **NO FEED** until a JPEG frame arrives. |
-| Dashboard chart and odometry | Values from `/odom` after a connection. Zeros until then. |
+| Dashboard chart and odometry | Values from `/odom` after a connection. Zeros until then. The motor tiles are labelled DEMO and are not wheel telemetry. |
 | Map, point cloud, 3D robot viewer | Views subscribe to `/map`, `/camera/depth/points`, `/odom`, and `/arm/joint_states`. The 3D tab looks for `robot.glb` in assets and shows a missing-model state when it is absent. |
 | AI chat | Sends text on `/ai/command` or `/mission/command` only while the socket is connected. The face animation (idle / processing / speaking) is a local timer, not a robot reply. |
 | Controls | Joystick and arm sliders publish `/cmd_vel/teleop`, `/control_mode`, and `/arm/joint_commands` when connected. |

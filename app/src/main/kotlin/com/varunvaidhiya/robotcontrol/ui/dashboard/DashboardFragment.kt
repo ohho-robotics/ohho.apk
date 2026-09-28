@@ -35,6 +35,7 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
     private var chartEntryIndex = 0f
     private var bevVisible = false
+    private var endpointLabel = "--"
 
     override fun inflateBinding(inflater: LayoutInflater, container: ViewGroup?): FragmentDashboardBinding =
         FragmentDashboardBinding.inflate(inflater, container, false)
@@ -78,8 +79,10 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
                 launch {
                     dashboardViewModel.robotStatus.collectLatest { status ->
-                        binding.textIpAddress.text =
-                            "IP: ${if (status.ipAddress.isEmpty()) "--" else status.ipAddress}"
+                        val ip = if (status.ipAddress.isEmpty()) "--" else status.ipAddress
+                        binding.textIpAddress.text = "IP: $ip"
+                        endpointLabel = if (status.ipAddress.isEmpty()) "--" else "${status.ipAddress}:${status.port}"
+                        updateConnectionStatus(dashboardViewModel.connectionState.value)
                     }
                 }
 
@@ -186,7 +189,7 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
     private fun updateConnectionStatus(state: ROSBridgeManager.ConnectionState) {
         val (text, colorRes) = when (state) {
             ROSBridgeManager.ConnectionState.CONNECTED    ->
-                "SYS: ONLINE · ws://${binding.textIpAddress.text}"  to R.drawable.shape_circle_green
+                "SYS: ONLINE · ws://$endpointLabel"                 to R.drawable.shape_circle_green
             ROSBridgeManager.ConnectionState.CONNECTING  ->
                 "SYS: CONNECTING…"                                   to R.drawable.shape_circle_orange
             ROSBridgeManager.ConnectionState.DISCONNECTED ->
