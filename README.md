@@ -5,7 +5,7 @@ Kotlin app that drives an OmniBot-style robot over a ROSBridge WebSocket. The Gr
 Package `com.varunvaidhiya.robotcontrol`. Min SDK 24, compile and target SDK 35.
 
 <p align="left">
-  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache-2.0"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="Apache-2.0"/></a>
   <img src="https://img.shields.io/badge/Android-SDK_24+-brightgreen" alt="Android min SDK 24"/>
   <img src="https://img.shields.io/badge/Kotlin-2.1.0-purple" alt="Kotlin 2.1.0"/>
   <img src="https://img.shields.io/badge/AGP-8.13.2-orange" alt="Android Gradle Plugin 8.13.2"/>
@@ -125,4 +125,6 @@ On a robot network, run your own `rosbridge` on port 9090 and, for the camera, `
 
 ## License
 
-Apache License 2.0. The `LICENSE` file for this repository is added in the OHH-18 pull request. Third-party libraries are Gradle dependencies (not vendored sources) and keep their own licenses.
+[Apache License 2.0](LICENSE).
+
+No third-party source is vendored in this repository (there is no Meta XR SDK tree or other copied SDK). Dependencies are declared in `app/build.gradle.kts` and keep their own licenses. The Gradle wrapper jar under `gradle/wrapper/` stays under the Gradle wrapper's license.
