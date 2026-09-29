@@ -42,7 +42,7 @@
                 android:id="@+id/home_ros_nodes"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="-- ROS nodes"
+                android:text="DEMO DATA"
                 android:textColor="@color/hud_muted"
                 android:textSize="8sp"
                 android:fontFamily="monospace" />
@@ -73,7 +73,7 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|start"
                 android:layout_margin="6dp"
-                android:text="AUTO-ROTATING · ARM TRACKING /joint_states"
+                android:text="Roadmap · 3D model is not in this build"
                 android:textColor="@color/hud_muted"
                 android:textSize="7sp"
                 android:fontFamily="monospace"
@@ -92,7 +92,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="JOINT STATES"
+                    android:text="JOINT STATES · DEMO"
                     android:textColor="@color/hud_muted"
                     android:textSize="7sp"
                     android:fontFamily="monospace"
@@ -117,7 +117,18 @@
             </LinearLayout>
         </FrameLayout>
 
-        <!-- ── Metric cards ───────────────────────────────────────── -->
+        <!-- ── Metric cards (locally simulated; not robot telemetry) ── -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:paddingTop="8dp"
+            android:text="DEMO DATA · battery, Pi, workstation and model load are simulated on the phone"
+            android:textColor="@color/hud_warn"
+            android:textSize="8sp"
+            android:fontFamily="monospace" />
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"

@@ -27,4 +27,12 @@ class RobotRepositoryTest {
         assertEquals(3.0f, speeds.backLeft, 0.001f)
         assertEquals(4.0f, speeds.backRight, 0.001f)
     }
+
+    @Test
+    fun `rosbridge url uses the saved host and port`() {
+        assertEquals(
+            "ws://10.0.2.2:9090",
+            RobotRepository.rosBridgeUrl("10.0.2.2", 9090)
+        )
+    }
 }

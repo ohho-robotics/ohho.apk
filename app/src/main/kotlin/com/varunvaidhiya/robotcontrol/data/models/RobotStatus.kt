@@ -6,6 +6,7 @@ package com.varunvaidhiya.robotcontrol.data.models
 data class RobotStatus(
     val isConnected: Boolean = false,
     val ipAddress: String = "",
+    val port: Int = 9090,
     val signalStrength: Int = 0, // 0-100
     val timestamp: Long = System.currentTimeMillis(),
     val rosNodesActive: Int = 0,
