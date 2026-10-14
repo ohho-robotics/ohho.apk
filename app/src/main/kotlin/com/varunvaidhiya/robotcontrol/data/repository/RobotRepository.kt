@@ -1,6 +1,7 @@
 package com.varunvaidhiya.robotcontrol.data.repository
 
 import com.varunvaidhiya.robotcontrol.data.models.*
+import com.varunvaidhiya.robotcontrol.data.ros.OccupancyGridParser
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeListener
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
 import com.varunvaidhiya.robotcontrol.ui.views.PointCloudView
@@ -26,6 +27,11 @@ class RobotRepository @Inject constructor() {
     companion object {
         /** ROSBridge WebSocket URL opened by [connect]. */
         fun rosBridgeUrl(ip: String, port: Int): String = "ws://$ip:$port"
+
+        /** Captures outbound publishes in JVM unit tests (no socket required). */
+        @VisibleForTesting
+        @Volatile
+        var testPublishSink: ((String, Map<String, Any>) -> Unit)? = null
     }
 
     private var rosManager: ROSBridgeManager? = null
@@ -168,6 +174,13 @@ class RobotRepository @Inject constructor() {
     fun sendAICommand(command: String) =
         rosManager?.publish(Constants.TOPIC_AI_COMMAND, mapOf("data" to command))
 
+    /** Publish a natural-language goal to /agent/goal (std_msgs/String). */
+    fun sendAgentGoal(goal: String) {
+        val msg = mapOf("data" to goal)
+        testPublishSink?.invoke(Constants.TOPIC_AGENT_GOAL, msg)
+        rosManager?.publish(Constants.TOPIC_AGENT_GOAL, msg)
+    }
+
     /** Start rosbag2 recording (name without extension). */
     fun startRecording(bagName: String) {
         rosManager?.publish(Constants.TOPIC_RECORD_START, mapOf("data" to bagName))
@@ -260,22 +273,8 @@ class RobotRepository @Inject constructor() {
         )
     }
 
-    @Suppress("UNCHECKED_CAST")
     private fun parseMap(msg: Map<String, Any>) {
-        val info   = msg["info"] as? Map<String, Any> ?: return
-        val width  = (info["width"]      as? Number)?.toInt()   ?: return
-        val height = (info["height"]     as? Number)?.toInt()   ?: return
-        val res    = (info["resolution"] as? Number)?.toFloat() ?: 0.05f
-        val origin    = info["origin"] as? Map<String, Any>
-        val originPos = origin?.get("position") as? Map<String, Any>
-        val originX   = (originPos?.get("x") as? Number)?.toFloat() ?: 0f
-        val originY   = (originPos?.get("y") as? Number)?.toFloat() ?: 0f
-        val rawData   = msg["data"] as? List<Number> ?: return
-        _mapData.value = MapData(
-            width = width, height = height,
-            resolution = res, originX = originX, originY = originY,
-            cells = IntArray(rawData.size) { rawData[it].toInt() }
-        )
+        _mapData.value = OccupancyGridParser.parse(msg) ?: return
     }
 
     private fun parseMissionStatus(msg: Map<String, Any>) {

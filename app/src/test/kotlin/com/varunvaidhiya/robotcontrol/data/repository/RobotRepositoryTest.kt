@@ -79,6 +79,27 @@ class RobotRepositoryTest {
     }
 
     @Test
+    fun `map message updates occupancy grid`() {
+        val repo = RobotRepository()
+        repo.deliverRosMessageForTest(
+            Constants.TOPIC_MAP,
+            mapOf(
+                "info" to mapOf(
+                    "width" to 2,
+                    "height" to 1,
+                    "resolution" to 0.05,
+                    "origin" to mapOf("position" to mapOf("x" to 0.0, "y" to 0.0)),
+                ),
+                "data" to listOf(0, 100),
+            ),
+        )
+        val map = repo.mapData.value
+        assertEquals(2, map.width)
+        assertEquals(1, map.height)
+        assertTrue(map.cells.contentEquals(intArrayOf(0, 100)))
+    }
+
+    @Test
     fun `battery_state message updates home telemetry`() {
         val repo = RobotRepository()
         repo.deliverRosMessageForTest(
