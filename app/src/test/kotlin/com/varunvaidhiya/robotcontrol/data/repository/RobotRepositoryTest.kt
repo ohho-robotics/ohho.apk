@@ -1,7 +1,11 @@
 package com.varunvaidhiya.robotcontrol.data.repository
 
 import com.varunvaidhiya.robotcontrol.data.models.WheelSpeed
+import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
+import com.varunvaidhiya.robotcontrol.utils.Constants
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RobotRepositoryTest {
@@ -34,5 +38,54 @@ class RobotRepositoryTest {
             "ws://10.0.2.2:9090",
             RobotRepository.rosBridgeUrl("10.0.2.2", 9090)
         )
+    }
+
+    @Test
+    fun `connect sets connecting state and endpoint on robot status`() {
+        val repo = RobotRepository()
+        assertEquals(ROSBridgeManager.ConnectionState.DISCONNECTED, repo.connectionState.value)
+
+        repo.connect("192.168.1.50", 9091)
+
+        assertEquals(ROSBridgeManager.ConnectionState.CONNECTING, repo.connectionState.value)
+        assertEquals("192.168.1.50", repo.robotStatus.value.ipAddress)
+        assertEquals(9091, repo.robotStatus.value.port)
+    }
+
+    @Test
+    fun `ros connected listener marks repository connected`() {
+        val repo = RobotRepository()
+        repo.deliverRosConnectedForTest()
+
+        assertEquals(ROSBridgeManager.ConnectionState.CONNECTED, repo.connectionState.value)
+        assertTrue(repo.robotStatus.value.isConnected)
+    }
+
+    @Test
+    fun `ros disconnected listener clears connection and home telemetry`() {
+        val repo = RobotRepository()
+        repo.deliverRosConnectedForTest()
+        repo.deliverRosMessageForTest(
+            Constants.TOPIC_BATTERY_STATE,
+            mapOf("percentage" to 0.75),
+        )
+        assertTrue(repo.homeTelemetry.value.hasBatteryFromRos)
+
+        repo.deliverRosDisconnectedForTest()
+
+        assertEquals(ROSBridgeManager.ConnectionState.DISCONNECTED, repo.connectionState.value)
+        assertFalse(repo.robotStatus.value.isConnected)
+        assertFalse(repo.homeTelemetry.value.hasBatteryFromRos)
+    }
+
+    @Test
+    fun `battery_state message updates home telemetry`() {
+        val repo = RobotRepository()
+        repo.deliverRosMessageForTest(
+            Constants.TOPIC_BATTERY_STATE,
+            mapOf("percentage" to 0.63),
+        )
+        assertEquals(63f, repo.homeTelemetry.value.batteryMainPct!!, 0.01f)
+        assertTrue(repo.homeTelemetry.value.hasBatteryFromRos)
     }
 }

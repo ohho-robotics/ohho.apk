@@ -5,6 +5,8 @@ import com.varunvaidhiya.robotcontrol.network.ROSBridgeListener
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
 import com.varunvaidhiya.robotcontrol.ui.views.PointCloudView
 import com.varunvaidhiya.robotcontrol.utils.Constants
+import androidx.annotation.VisibleForTesting
+import com.varunvaidhiya.robotcontrol.data.models.HomeTelemetry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,6 +45,9 @@ class RobotRepository @Inject constructor() {
     // ── Robot Status ───────────────────────────────────────────────────────────
     private val _robotStatus = MutableStateFlow(RobotStatus())
     val robotStatus: StateFlow<RobotStatus> = _robotStatus.asStateFlow()
+
+    private val _homeTelemetry = MutableStateFlow(HomeTelemetry())
+    val homeTelemetry: StateFlow<HomeTelemetry> = _homeTelemetry.asStateFlow()
 
     // ── Motor / Wheel data ─────────────────────────────────────────────────────
     private val _motorData = MutableStateFlow(MotorData(MotorStatus(), MotorStatus(), MotorStatus(), MotorStatus()))
@@ -92,6 +97,7 @@ class RobotRepository @Inject constructor() {
         override fun onDisconnected() {
             _connectionState.value = ROSBridgeManager.ConnectionState.DISCONNECTED
             _robotStatus.value = _robotStatus.value.copy(isConnected = false)
+            _homeTelemetry.value = HomeTelemetry()
         }
 
         override fun onError(error: String) {
@@ -182,6 +188,7 @@ class RobotRepository @Inject constructor() {
             subscribe(Constants.TOPIC_ODOM,               "nav_msgs/Odometry")
             subscribe(Constants.TOPIC_MAP,                 "nav_msgs/OccupancyGrid")
             subscribe(Constants.TOPIC_IMU,                 "sensor_msgs/Imu")
+            subscribe(Constants.TOPIC_BATTERY_STATE,       "sensor_msgs/BatteryState")
             subscribe(Constants.TOPIC_DIAGNOSTICS,         "diagnostic_msgs/DiagnosticArray")
             subscribe(Constants.TOPIC_ARM_JOINT_STATES,    "sensor_msgs/JointState")
             subscribe(Constants.TOPIC_MISSION_STATUS,      "std_msgs/String")
@@ -209,6 +216,8 @@ class RobotRepository @Inject constructor() {
                 Constants.TOPIC_ROBOT_STATUS       -> parseRobotStatus(message)
                 Constants.TOPIC_WHEEL_SPEEDS       -> parseWheelSpeeds(message)
                 Constants.TOPIC_MOTOR_PWM          -> parseMotorData(message)
+                Constants.TOPIC_BATTERY_STATE      -> parseBatteryState(message)
+                Constants.TOPIC_DIAGNOSTICS        -> parseDiagnostics(message)
                 Constants.TOPIC_AI_STATUS          -> parseStringTopic(message) { _aiStatus.value = it }
                 Constants.TOPIC_AI_RESPONSE_NEEDED -> parseStringTopic(message) { _aiResponseNeeded.value = it }
                 Constants.TOPIC_OTA_STATUS         -> parseOtaStatus(message)
@@ -322,6 +331,15 @@ class RobotRepository @Inject constructor() {
         _pointCloud.value = pts
     }
 
+    private fun parseBatteryState(msg: Map<String, Any>) {
+        val pct = RosHomeTelemetryParser.batteryPercentage(msg) ?: return
+        _homeTelemetry.value = RosHomeTelemetryParser.withBattery(_homeTelemetry.value, pct)
+    }
+
+    private fun parseDiagnostics(msg: Map<String, Any>) {
+        _homeTelemetry.value = RosHomeTelemetryParser.mergeDiagnostics(_homeTelemetry.value, msg)
+    }
+
     private fun parseRobotStatus(msg: Map<String, Any>) {
         val isConnected = msg["connected"] as? Boolean ?: true
         _robotStatus.value = _robotStatus.value.copy(isConnected = isConnected, timestamp = System.currentTimeMillis())
@@ -411,5 +429,20 @@ class RobotRepository @Inject constructor() {
         rosManager?.callService(Constants.SERVICE_OTA_ROLLBACK_WORKSPACE) { result ->
             callback(result["success"] as? Boolean ?: false, result["message"] as? String ?: "")
         }
+    }
+
+    @VisibleForTesting
+    internal fun deliverRosMessageForTest(topic: String, message: Map<String, Any>) {
+        handleMessage(topic, message)
+    }
+
+    @VisibleForTesting
+    internal fun deliverRosConnectedForTest() {
+        rosListener.onConnected()
+    }
+
+    @VisibleForTesting
+    internal fun deliverRosDisconnectedForTest() {
+        rosListener.onDisconnected()
     }
 }

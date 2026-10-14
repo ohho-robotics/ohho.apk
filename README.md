@@ -17,9 +17,9 @@ The license badge matches `LICENSE` (Apache-2.0). CI runs `./gradlew assembleDeb
 
 | What you see | What the code does |
 |---|---|
-| Settings IP and port | Saved in DataStore. On launch, and again when you tap SAVE CONFIG, `MainViewModel` calls `RobotRepository.connect`, which opens `ws://<ip>:<port>` (cleartext, not TLS). |
+| Settings IP and port | Saved in DataStore. On launch `MainViewModel` reads them and connects; SAVE CONFIG also calls `connectToRobot`, which opens `ws://<ip>:<port>` (cleartext, not TLS). |
 | Connection dot | Green / amber / red from the ROSBridge socket state. |
-| Home battery, Pi, workstation, and model cards | **Demo data.** `HomeFragment` advances them on a timer. They are not `/diagnostics` and not a detected hardware inventory. The screen says so. |
+| Home battery and Pi cards | When ROSBridge is connected and the robot (or `tools/rosbridge_stub.py`) publishes `/battery_state` and `/diagnostics`, those cards show **live** values. Workstation and model load stay **demo** until wired. The banner labels LIVE vs DEMO. |
 | Home joint readout and empty 3D pane | Placeholders. `robot.glb` is not in this repo, and this screen does not load one. |
 | Dashboard camera | MJPEG from `http://<robot-ip>:8080/stream?topic=/camera/front/image_raw` only after the socket reports connected. The badge stays **NO FEED** until a JPEG frame arrives. |
 | Dashboard chart and odometry | Values from `/odom` after a connection. Zeros until then. The motor tiles are labelled DEMO and are not wheel telemetry. |
@@ -38,8 +38,8 @@ Not in this repository, and not claimed as working here:
 - TLS (`wss://`) for ROSBridge. The manifest allows cleartext traffic.
 - A checked-in `robot.glb`, URDF, or `tools/urdf_to_glb.py`.
 - Robot-side nodes (`rosbridge`, `web_video_server`, Nav2, camera, arm, OTA, Loki). This app only speaks to them.
-- Home metrics fed by real diagnostics.
 - Instrumented UI tests. Unit tests are `app/src/test` only.
+- Updated emulator screenshots after live-metrics UI (see `docs/OHH-38-human-todos.md`).
 
 ## Screenshots
 
@@ -96,6 +96,10 @@ The top bar, not the bottom bar, opens Settings and Observability.
 ├── gradle/wrapper/
 ├── gradlew
 ├── settings.gradle.kts                   # rootProject.name = RobotControl
+├── tools/
+│   ├── rosbridge_stub.py                 # WebSocket stub for emulator dev
+│   └── requirements-stub.txt
+├── docs/OHH-38-human-todos.md            # screenshots, recording, hardware checks
 ├── robot_app_prompt.md                   # original build notes, not a status report
 └── README.md
 ```
@@ -122,6 +126,17 @@ There is no `app/src/main/assets/` directory in git.
 `local.properties` is gitignored. Debug APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
 On a robot network, run your own `rosbridge` on port 9090 and, for the camera, `web_video_server` on port 8080. Those processes are not in this repo. The default address in the app is `192.168.1.100:9090`. From an Android emulator, the host machine is `10.0.2.2`.
+
+### Local ROSBridge stub (not a robot)
+
+For emulator smoke tests without hardware:
+
+```bash
+pip install -r tools/requirements-stub.txt
+python tools/rosbridge_stub.py --port 9090
+```
+
+The stub publishes synthetic `/battery_state`, `/diagnostics`, and `/odom`. It does not replace a real robot stack.
 
 ## License
 
