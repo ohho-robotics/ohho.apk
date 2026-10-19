@@ -39,13 +39,14 @@ class ControlsFragment : BaseFragment<FragmentControlsBinding>() {
         setupModeToggle()
         startEstopPulse()
         observeMode()
-        observeDroneTeleopRefusal()
+        observeTeleopRefusal()
     }
 
     // ── Joystick ──────────────────────────────────────────────────────
 
     private fun setupJoystick() {
-        binding.virtualJoystick.onJoystickMoved = { x, y ->
+        binding.virtualJoystick.onJoystickMoved = stick@{ x, y ->
+            if (viewModel.humanoidTeleopRefused.value) return@stick
             val maxLinear = 1.0f; val maxAngular = 1.5f
             val linearX = y * maxLinear
             val angularZ = -x * maxAngular
@@ -114,7 +115,7 @@ class ControlsFragment : BaseFragment<FragmentControlsBinding>() {
                 else                -> return@addOnButtonCheckedListener
             }
             viewModel.setMode(mode)
-            binding.virtualJoystick.isEnabled = (mode != RobotMode.AUTONOMOUS)
+            applyDriveControls(mode)
         }
     }
 
@@ -130,20 +131,46 @@ class ControlsFragment : BaseFragment<FragmentControlsBinding>() {
                     if (binding.toggleMode.checkedButtonId != targetId) {
                         binding.toggleMode.check(targetId)
                     }
-                    binding.virtualJoystick.isEnabled = (status.currentMode != RobotMode.AUTONOMOUS)
+                    applyDriveControls(status.currentMode)
                 }
             }
         }
     }
 
-    private fun observeDroneTeleopRefusal() {
+    private fun observeTeleopRefusal() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.droneTeleopRefused.collectLatest { refused ->
-                    binding.textDroneTeleopRefusal.visibility =
-                        if (refused) View.VISIBLE else View.GONE
+                launch {
+                    viewModel.droneTeleopRefused.collectLatest { applyDriveControls() }
+                }
+                launch {
+                    viewModel.humanoidTeleopRefused.collectLatest { applyDriveControls() }
                 }
             }
+        }
+    }
+
+    /**
+     * Aerial refusal keeps the stick and shows the climb message.
+     * A humanoid profile is not supported yet: the stick and ground mode
+     * toggle are disabled, and the banner says why nothing is published.
+     */
+    private fun applyDriveControls(mode: RobotMode = viewModel.robotStatus.value.currentMode) {
+        val humanoidRefused = viewModel.humanoidTeleopRefused.value
+        val droneRefused = viewModel.droneTeleopRefused.value
+        binding.virtualJoystick.isEnabled = !humanoidRefused && mode != RobotMode.AUTONOMOUS
+        binding.toggleMode.isEnabled = !humanoidRefused
+        val banner = binding.textDroneTeleopRefusal
+        when {
+            humanoidRefused -> {
+                banner.setText(R.string.humanoid_teleop_refused)
+                banner.visibility = View.VISIBLE
+            }
+            droneRefused -> {
+                banner.setText(R.string.drone_teleop_refused)
+                banner.visibility = View.VISIBLE
+            }
+            else -> banner.visibility = View.GONE
         }
     }
 

@@ -129,6 +129,7 @@
             android:fontFamily="monospace" />
     </LinearLayout>
 
+    <!-- Aerial climb refusal, or humanoid "not supported yet". The fragment sets the text. -->
     <TextView
         android:id="@+id/text_drone_teleop_refusal"
         android:layout_width="0dp"
