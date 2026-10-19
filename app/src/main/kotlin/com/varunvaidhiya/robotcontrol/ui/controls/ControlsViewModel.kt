@@ -14,6 +14,7 @@ class ControlsViewModel @Inject constructor(
 
     val robotStatus      = repository.robotStatus
     val armJointPositions = repository.armJointPositions
+    val droneTeleopRefused = repository.droneTeleopRefused
 
     fun sendVelocity(linearX: Float, linearY: Float, angular: Float) {
         repository.sendVelocity(VelocityCommand(linearX, linearY, angular))
