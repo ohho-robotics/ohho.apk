@@ -5,6 +5,7 @@ import com.varunvaidhiya.robotcontrol.network.ROSBridgeListener
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
 import com.varunvaidhiya.robotcontrol.safety.DroneTeleopGuard
 import com.varunvaidhiya.robotcontrol.safety.RobotTarget
+import com.varunvaidhiya.robotcontrol.safety.TeleopDecision
 import com.varunvaidhiya.robotcontrol.ui.views.PointCloudView
 import com.varunvaidhiya.robotcontrol.utils.Constants
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,11 +38,29 @@ class RobotRepository @Inject constructor() {
     /** True when the selected profile or URI is aerial, so `/cmd_vel/teleop` is not published. */
     val droneTeleopRefused: StateFlow<Boolean> = _droneTeleopRefused.asStateFlow()
 
+    private val _humanoidTeleopRefused = MutableStateFlow(false)
+    /**
+     * True when the selected profile is a humanoid (`robot_class` or
+     * `humanoid.posture`). Teleop is not supported yet, so no teleop topic is published.
+     */
+    val humanoidTeleopRefused: StateFlow<Boolean> = _humanoidTeleopRefused.asStateFlow()
+
     /**
      * Sink for `/cmd_vel/teleop`. Production uses [ROSBridgeManager.publish].
-     * Tests replace this so they can assert that a drone selection publishes nothing.
+     * Tests replace this so they can assert that a drone or humanoid selection publishes nothing.
      */
     internal var cmdVelPublisher: (topic: String, message: Map<String, Any>) -> Unit =
+        { topic, message -> rosManager?.publish(topic, message) }
+
+    /**
+     * Sink for teleop commands other than `/cmd_vel/teleop` (mode, arm, mission).
+     * A humanoid profile does not call this. Emergency stop uses [safetyPublisher].
+     */
+    internal var commandPublisher: (topic: String, message: Map<String, Any>) -> Unit =
+        { topic, message -> rosManager?.publish(topic, message) }
+
+    /** Emergency stop stays on its own sink so a teleop refusal cannot drop it. */
+    internal var safetyPublisher: (topic: String, message: Map<String, Any>) -> Unit =
         { topic, message -> rosManager?.publish(topic, message) }
 
     // ── Connection ─────────────────────────────────────────────────────────────
@@ -134,18 +153,30 @@ class RobotRepository @Inject constructor() {
     /**
      * Record the robot the operator selected. Replaces any previous selection.
      * An aerial profile or drone URI makes [sendVelocity] publish nothing.
+     * A humanoid profile (`robotClass` or `humanoid.posture`) publishes no teleop topic.
      */
     fun selectRobot(
         profileId: String? = null,
         transportUri: String? = null,
         capabilities: Collection<String> = emptyList(),
+        robotClass: String? = null,
     ) {
         selectedTarget = RobotTarget(
             profileId = profileId?.trim()?.ifEmpty { null },
             transportUri = transportUri?.trim()?.ifEmpty { null },
             capabilities = capabilities.toSet(),
+            robotClass = robotClass?.trim()?.ifEmpty { null },
         )
-        _droneTeleopRefused.value = droneTeleopGuard.refuses(teleopTarget())
+        recordDecision(droneTeleopGuard.decide(teleopTarget()))
+    }
+
+    /**
+     * Select from a robot descriptor or profile map (`robot_class`, capabilities).
+     * Vendor names are not read. See [RobotTarget.fromDescriptor].
+     */
+    fun selectRobot(descriptor: Map<String, *>) {
+        selectedTarget = RobotTarget.fromDescriptor(descriptor)
+        recordDecision(droneTeleopGuard.decide(teleopTarget()))
     }
 
     fun disconnect() = rosManager?.disconnect()
@@ -155,13 +186,17 @@ class RobotRepository @Inject constructor() {
      * so the app does not dial a flight transport. Ground addresses are unchanged.
      */
     private fun blockDroneConnect(ip: String): Boolean {
-        val addressIsAerial = droneTeleopGuard.refuses(RobotTarget(transportUri = ip))
-        _droneTeleopRefused.value = addressIsAerial || droneTeleopGuard.refuses(teleopTarget())
-        if (!addressIsAerial) return false
-        rosManager?.disconnect()
-        rosManager = null
-        _connectionState.value = ROSBridgeManager.ConnectionState.DISCONNECTED
-        return true
+        val addressDecision = droneTeleopGuard.decide(RobotTarget(transportUri = ip))
+        val addressIsAerial = isDroneRefusal(addressDecision)
+        if (addressIsAerial) {
+            recordDecision(addressDecision)
+            rosManager?.disconnect()
+            rosManager = null
+            _connectionState.value = ROSBridgeManager.ConnectionState.DISCONNECTED
+            return true
+        }
+        recordDecision(droneTeleopGuard.decide(teleopTarget()))
+        return false
     }
 
     private fun teleopTarget(): RobotTarget {
@@ -171,24 +206,48 @@ class RobotRepository @Inject constructor() {
         if (droneTeleopGuard.refuses(connected)) return connected
         val selectedExplicitly = selectedTarget.profileId != null ||
             !selectedTarget.transportUri.isNullOrBlank() ||
-            selectedTarget.capabilities.isNotEmpty()
+            selectedTarget.capabilities.isNotEmpty() ||
+            !selectedTarget.robotClass.isNullOrBlank()
         return if (selectedExplicitly) selectedTarget else connected
     }
 
-    fun sendVelocity(command: VelocityCommand) {
-        // OHH-297: aerial targets publish nothing on /cmd_vel/teleop.
-        _droneTeleopRefused.value = !droneTeleopGuard.publishIfAllowed(
-            teleopTarget(),
-            command.toROSTwist(),
-            cmdVelPublisher,
+    private fun recordDecision(decision: TeleopDecision) {
+        _droneTeleopRefused.value = isDroneRefusal(decision)
+        _humanoidTeleopRefused.value = decision is TeleopDecision.Refuse &&
+            decision.messageResName == DroneTeleopGuard.HUMANOID_REFUSAL_STRING_RES_NAME
+    }
+
+    private fun isDroneRefusal(decision: TeleopDecision): Boolean =
+        decision is TeleopDecision.Refuse &&
+            decision.messageResName == DroneTeleopGuard.REFUSAL_STRING_RES_NAME
+
+    /**
+     * Mode, arm, and other operator commands. Humanoid profiles publish nothing.
+     * Aerial profiles still publish these; only `/cmd_vel/teleop` is refused for them.
+     */
+    private fun publishRobotCommand(topic: String, message: Map<String, Any>) {
+        val target = teleopTarget()
+        val published = droneTeleopGuard.publishTeleopIfAllowed(
+            target,
+            topic,
+            message,
+            commandPublisher,
         )
+        if (!published) recordDecision(droneTeleopGuard.decide(target))
+    }
+
+    fun sendVelocity(command: VelocityCommand) {
+        // OHH-297 / OHH-339: aerial and humanoid targets publish nothing on /cmd_vel/teleop.
+        val target = teleopTarget()
+        recordDecision(droneTeleopGuard.decide(target))
+        droneTeleopGuard.publishIfAllowed(target, command.toROSTwist(), cmdVelPublisher)
     }
 
     fun sendEmergencyStop() =
-        rosManager?.publish(Constants.TOPIC_EMERGENCY_STOP, mapOf("data" to true))
+        safetyPublisher(Constants.TOPIC_EMERGENCY_STOP, mapOf("data" to true))
 
     fun sendArmJointCommand(positions: DoubleArray) {
-        rosManager?.publish(
+        publishRobotCommand(
             Constants.TOPIC_ARM_JOINT_COMMANDS,
             mapOf(
                 "name"     to Constants.ARM_JOINT_NAMES,
@@ -200,32 +259,32 @@ class RobotRepository @Inject constructor() {
     }
 
     fun setArmEnabled(enabled: Boolean) =
-        rosManager?.publish(Constants.TOPIC_ARM_ENABLE, mapOf("data" to enabled))
+        publishRobotCommand(Constants.TOPIC_ARM_ENABLE, mapOf("data" to enabled))
 
     fun sendMode(mode: RobotMode) {
         // Publish to /robot_mode for external monitoring AND to /control_mode
         // so cmd_vel_mux switches the active velocity source.
-        rosManager?.publish(Constants.TOPIC_ROBOT_MODE, mapOf("data" to mode.name))
+        publishRobotCommand(Constants.TOPIC_ROBOT_MODE, mapOf("data" to mode.name))
         val muxMode = when (mode) {
             RobotMode.TELEOP     -> "teleop"
             RobotMode.AUTONOMOUS -> "nav2"
             RobotMode.MANUAL     -> "teleop"
         }
-        rosManager?.publish(Constants.TOPIC_CONTROL_MODE, mapOf("data" to muxMode))
+        publishRobotCommand(Constants.TOPIC_CONTROL_MODE, mapOf("data" to muxMode))
         _robotStatus.value = _robotStatus.value.copy(currentMode = mode)
     }
 
     /** Set the cmd_vel_mux control mode directly ("nav2"|"vla"|"teleop"|"rl_nav"). */
     fun sendControlMode(mode: String) =
-        rosManager?.publish(Constants.TOPIC_CONTROL_MODE, mapOf("data" to mode))
+        publishRobotCommand(Constants.TOPIC_CONTROL_MODE, mapOf("data" to mode))
 
     /** Send a natural-language / mission command to the mission planner. */
     fun sendMissionCommand(command: String) =
-        rosManager?.publish(Constants.TOPIC_MISSION_COMMAND, mapOf("data" to command))
+        publishRobotCommand(Constants.TOPIC_MISSION_COMMAND, mapOf("data" to command))
 
     /** Send a natural-language command to the LangGraph AI orchestration node. */
     fun sendAICommand(command: String) =
-        rosManager?.publish(Constants.TOPIC_AI_COMMAND, mapOf("data" to command))
+        publishRobotCommand(Constants.TOPIC_AI_COMMAND, mapOf("data" to command))
 
     /** Start rosbag2 recording (name without extension). */
     fun startRecording(bagName: String) {
