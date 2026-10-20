@@ -7,7 +7,9 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.SeekBar
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
+import com.varunvaidhiya.robotcontrol.ui.MainViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -22,6 +24,7 @@ import java.util.Locale
 class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
 
     private val viewModel: SettingsViewModel by viewModels()
+    private val mainViewModel: MainViewModel by activityViewModels()
 
     private val colorCyan = Color.parseColor("#00E5FF")
     private val colorOk   = Color.parseColor("#00FF7F")
@@ -119,6 +122,7 @@ class SettingsFragment : BaseFragment<FragmentSettingsBinding>() {
             binding.layoutPort.error = null
 
             viewModel.saveConnectionSettings(ip, port)
+            mainViewModel.connectToRobot(ip, port)
             viewModel.saveObservabilitySettings(
                 gpuIp      = binding.editGpuIp.text?.toString()?.trim() ?: "192.168.1.100",
                 wandbKey   = binding.editWandbKey.text?.toString()?.trim() ?: "",

@@ -44,6 +44,7 @@ object Constants {
     const val TOPIC_ODOM               = "/odom"
     const val TOPIC_MAP                = "/map"
     const val TOPIC_IMU                = "/imu/data"
+    const val TOPIC_BATTERY_STATE       = "/battery_state"
     const val TOPIC_DIAGNOSTICS        = "/diagnostics"
     const val TOPIC_ARM_JOINT_STATES   = "/arm/joint_states"
 
