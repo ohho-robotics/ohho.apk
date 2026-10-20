@@ -24,6 +24,7 @@ import com.varunvaidhiya.robotcontrol.ui.common.BaseFragment
 import com.varunvaidhiya.robotcontrol.utils.Constants
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -88,15 +89,17 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
                 launch {
                     cameraViewModel.streamUrl.collectLatest { url ->
-                        binding.textLiveIndicator.text = "NO FEED"
-                        binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                         if (url.isNotEmpty()) {
+                            binding.textLiveIndicator.text = "CONNECTING…"
+                            binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                             binding.mjpegView.frameListener = {
                                 binding.textLiveIndicator.text = "● LIVE"
                                 binding.textLiveIndicator.setTextColor(Color.parseColor("#FF4444"))
                             }
                             binding.mjpegView.startStream(url)
                         } else {
+                            binding.textLiveIndicator.text = "CAMERA OFFLINE"
+                            binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                             binding.mjpegView.frameListener = null
                             binding.mjpegView.stopStream()
                         }
@@ -104,22 +107,19 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
                 }
 
                 launch {
-                    dashboardViewModel.odomData.collectLatest { odom ->
-                        updateChart(odom)
-                        updateOdomDisplay(odom)
-                        // Mirror odom into the BEV map overlay
-                        if (bevVisible) {
-                            binding.bevSlamView.updateRobotPose(odom.x, odom.y, odom.yaw)
+                    combine(
+                        dashboardViewModel.odomData,
+                        dashboardViewModel.mapData,
+                    ) { odom, map -> odom to map }
+                        .collectLatest { (odom, map) ->
+                            updateChart(odom)
+                            updateOdomDisplay(odom)
+                            if (bevVisible && map.cells.isNotEmpty()) {
+                                binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+                                val (px, py) = map.metersToPixel(odom.x, odom.y)
+                                binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
+                            }
                         }
-                    }
-                }
-
-                launch {
-                    dashboardViewModel.mapData.collectLatest { map ->
-                        if (map.cells.isNotEmpty() && bevVisible) {
-                            binding.bevSlamView.updateMap(map.width, map.height, map.cells)
-                        }
-                    }
                 }
 
                 launch {

@@ -282,7 +282,7 @@
                 android:background="@null"
                 android:textColor="@color/hud_accent"
                 android:textColorHint="@color/hud_muted"
-                android:hint="Type a command…"
+                android:hint="Agent goal → /agent/goal…"
                 android:textSize="9.5sp"
                 android:fontFamily="monospace"
                 android:imeOptions="actionSend"
