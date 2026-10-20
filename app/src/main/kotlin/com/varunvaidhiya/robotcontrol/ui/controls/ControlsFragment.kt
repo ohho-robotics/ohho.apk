@@ -39,6 +39,7 @@ class ControlsFragment : BaseFragment<FragmentControlsBinding>() {
         setupModeToggle()
         startEstopPulse()
         observeMode()
+        observeDroneTeleopRefusal()
     }
 
     // ── Joystick ──────────────────────────────────────────────────────
@@ -130,6 +131,17 @@ class ControlsFragment : BaseFragment<FragmentControlsBinding>() {
                         binding.toggleMode.check(targetId)
                     }
                     binding.virtualJoystick.isEnabled = (status.currentMode != RobotMode.AUTONOMOUS)
+                }
+            }
+        }
+    }
+
+    private fun observeDroneTeleopRefusal() {
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                viewModel.droneTeleopRefused.collectLatest { refused ->
+                    binding.textDroneTeleopRefusal.visibility =
+                        if (refused) View.VISIBLE else View.GONE
                 }
             }
         }
