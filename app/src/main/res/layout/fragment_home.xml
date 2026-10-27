@@ -119,6 +119,7 @@
 
         <!-- ── Metric cards (locally simulated; not robot telemetry) ── -->
         <TextView
+            android:id="@+id/home_metrics_banner"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:paddingStart="10dp"
