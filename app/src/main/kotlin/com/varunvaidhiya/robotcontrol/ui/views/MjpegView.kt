@@ -231,7 +231,10 @@ class MjpegView @JvmOverloads constructor(
             canvas.drawBitmap(bmp, srcRect, dstRect, paint)
         } ?: run {
             // Draw placeholder text
-            canvas.drawText("No Signal", width / 2f, height / 2f, overlayPaint)
+            canvas.drawText("CAMERA OFFLINE", width / 2f, height / 2f - 20f, overlayPaint)
+            overlayPaint.textSize = 28f
+            canvas.drawText("No MJPEG feed", width / 2f, height / 2f + 24f, overlayPaint)
+            overlayPaint.textSize = 40f
         }
     }
     

@@ -12,6 +12,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Robot pose in occupancy-grid pixels. One value so any of x, y, or yaw notifies collectors. */
+data class PixelPose(val x: Float, val y: Float, val yaw: Float)
+
 @HiltViewModel
 class SlamViewModel @Inject constructor(
     private val repository: RobotRepository
@@ -31,14 +34,8 @@ class SlamViewModel @Inject constructor(
     private val _mapResolution = MutableStateFlow(0.05f)
     val mapResolution: StateFlow<Float> = _mapResolution.asStateFlow()
 
-    private val _robotPoseX = MutableStateFlow(0f)
-    val robotPoseX: StateFlow<Float> = _robotPoseX.asStateFlow()
-
-    private val _robotPoseY = MutableStateFlow(0f)
-    val robotPoseY: StateFlow<Float> = _robotPoseY.asStateFlow()
-
-    private val _robotYaw = MutableStateFlow(0f)
-    val robotYaw: StateFlow<Float> = _robotYaw.asStateFlow()
+    private val _robotPose = MutableStateFlow<PixelPose?>(null)
+    val robotPose: StateFlow<PixelPose?> = _robotPose.asStateFlow()
 
     // Odom in meters for the pose info panel
     private val _odomMeters = MutableStateFlow(OdomData())
@@ -47,12 +44,16 @@ class SlamViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             repository.mapData.collect { map ->
-                if (map.cells.isNotEmpty()) {
-                    _mapWidth.value      = map.width
-                    _mapHeight.value     = map.height
-                    _mapData.value       = map.cells
-                    _mapResolution.value = map.resolution
+                if (map.cells.isEmpty()) {
+                    _mapData.value = null
+                    _mapWidth.value = 0
+                    _mapHeight.value = 0
+                    return@collect
                 }
+                _mapWidth.value      = map.width
+                _mapHeight.value     = map.height
+                _mapData.value       = map.cells
+                _mapResolution.value = map.resolution
             }
         }
 
@@ -60,12 +61,8 @@ class SlamViewModel @Inject constructor(
             combine(repository.odomData, repository.mapData) { odom, map -> Pair(odom, map) }
                 .collect { (odom, map) ->
                     _odomMeters.value = odom
-                    if (map.resolution > 0f) {
-                        val (px, py) = map.metersToPixel(odom.x, odom.y)
-                        _robotPoseX.value = px
-                        _robotPoseY.value = py
-                        _robotYaw.value   = odom.yaw
-                    }
+                    val pixels = map.posePixelsIfSameFrame(odom)
+                    _robotPose.value = pixels?.let { PixelPose(it.first, it.second, odom.yaw) }
                 }
         }
     }

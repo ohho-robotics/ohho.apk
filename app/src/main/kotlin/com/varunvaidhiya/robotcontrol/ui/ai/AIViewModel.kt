@@ -63,6 +63,7 @@ class AIViewModel @Inject constructor(
         if (text.isBlank()) return
 
         appendMessage(ChatMessage(text, isUser = true))
+        repository.sendAgentGoal(text)
 
         // If the text looks like a structured mission command (contains ":"),
         // send it directly to /mission/command (mission_planner). Otherwise send

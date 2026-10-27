@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -46,21 +47,26 @@ class SlamMapFragment : BaseFragment<FragmentSlamMapBinding>() {
 
                 launch {
                     slamViewModel.mapData.collectLatest { data ->
-                        if (data != null) {
+                        val hasMap = data != null && data.isNotEmpty()
+                        binding.textMapPlaceholder.isVisible = !hasMap
+                        if (hasMap) {
                             val w = slamViewModel.mapWidth.value
                             val h = slamViewModel.mapHeight.value
-                            binding.slamMapView.updateMap(w, h, data)
+                            binding.slamMapView.updateMap(w, h, data!!)
                             updateMapStats(w, h, data)
+                        } else {
+                            binding.slamMapView.clearMap()
                         }
                     }
                 }
 
                 launch {
-                    slamViewModel.robotPoseX.collectLatest { _ ->
-                        val x = slamViewModel.robotPoseX.value
-                        val y = slamViewModel.robotPoseY.value
-                        val yaw = slamViewModel.robotYaw.value
-                        binding.slamMapView.updateRobotPose(x, y, yaw)
+                    slamViewModel.robotPose.collectLatest { pose ->
+                        if (pose == null || !pose.x.isFinite() || !pose.y.isFinite()) {
+                            binding.slamMapView.clearRobotPose()
+                        } else {
+                            binding.slamMapView.updateRobotPose(pose.x, pose.y, pose.yaw)
+                        }
                     }
                 }
 
