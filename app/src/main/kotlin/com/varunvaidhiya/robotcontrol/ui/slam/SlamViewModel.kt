@@ -31,10 +31,10 @@ class SlamViewModel @Inject constructor(
     private val _mapResolution = MutableStateFlow(0.05f)
     val mapResolution: StateFlow<Float> = _mapResolution.asStateFlow()
 
-    private val _robotPoseX = MutableStateFlow(0f)
+    private val _robotPoseX = MutableStateFlow(Float.NaN)
     val robotPoseX: StateFlow<Float> = _robotPoseX.asStateFlow()
 
-    private val _robotPoseY = MutableStateFlow(0f)
+    private val _robotPoseY = MutableStateFlow(Float.NaN)
     val robotPoseY: StateFlow<Float> = _robotPoseY.asStateFlow()
 
     private val _robotYaw = MutableStateFlow(0f)
@@ -47,12 +47,16 @@ class SlamViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             repository.mapData.collect { map ->
-                if (map.cells.isNotEmpty()) {
-                    _mapWidth.value      = map.width
-                    _mapHeight.value     = map.height
-                    _mapData.value       = map.cells
-                    _mapResolution.value = map.resolution
+                if (map.cells.isEmpty()) {
+                    _mapData.value = null
+                    _mapWidth.value = 0
+                    _mapHeight.value = 0
+                    return@collect
                 }
+                _mapWidth.value      = map.width
+                _mapHeight.value     = map.height
+                _mapData.value       = map.cells
+                _mapResolution.value = map.resolution
             }
         }
 
@@ -60,11 +64,14 @@ class SlamViewModel @Inject constructor(
             combine(repository.odomData, repository.mapData) { odom, map -> Pair(odom, map) }
                 .collect { (odom, map) ->
                     _odomMeters.value = odom
-                    if (map.resolution > 0f) {
-                        val (px, py) = map.metersToPixel(odom.x, odom.y)
-                        _robotPoseX.value = px
-                        _robotPoseY.value = py
-                        _robotYaw.value   = odom.yaw
+                    val pixels = map.posePixelsIfSameFrame(odom)
+                    if (pixels == null) {
+                        _robotPoseY.value = Float.NaN
+                        _robotPoseX.value = Float.NaN
+                    } else {
+                        _robotPoseY.value = pixels.second
+                        _robotYaw.value = odom.yaw
+                        _robotPoseX.value = pixels.first
                     }
                 }
         }

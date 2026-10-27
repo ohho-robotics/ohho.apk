@@ -54,16 +54,21 @@ class SlamMapFragment : BaseFragment<FragmentSlamMapBinding>() {
                             val h = slamViewModel.mapHeight.value
                             binding.slamMapView.updateMap(w, h, data!!)
                             updateMapStats(w, h, data)
+                        } else {
+                            binding.slamMapView.clearMap()
                         }
                     }
                 }
 
                 launch {
-                    slamViewModel.robotPoseX.collectLatest { _ ->
-                        val x = slamViewModel.robotPoseX.value
+                    slamViewModel.robotPoseX.collectLatest { x ->
                         val y = slamViewModel.robotPoseY.value
                         val yaw = slamViewModel.robotYaw.value
-                        binding.slamMapView.updateRobotPose(x, y, yaw)
+                        if (!x.isFinite() || !y.isFinite()) {
+                            binding.slamMapView.clearRobotPose()
+                        } else {
+                            binding.slamMapView.updateRobotPose(x, y, yaw)
+                        }
                     }
                 }
 

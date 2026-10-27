@@ -101,7 +101,48 @@ class RobotRepositoryTest {
         val map = repo.mapData.value
         assertEquals(2, map.width)
         assertEquals(1, map.height)
+        assertEquals("", map.frameId)
         assertTrue(map.cells.contentEquals(intArrayOf(0, 100)))
+    }
+
+    @Test
+    fun `odom message keeps the header frame`() {
+        val repo = RobotRepository()
+        repo.deliverRosMessageForTest(Constants.TOPIC_ODOM, odomMessage(x = 1.25, frameId = "odom"))
+        assertEquals("odom", repo.odomData.value.frameId)
+        assertEquals(1.25f, repo.odomData.value.x, 0.001f)
+        assertEquals(0f, repo.odomData.value.yaw, 0.001f)
+    }
+
+    @Test
+    fun `map message keeps the header frame`() {
+        val repo = RobotRepository()
+        repo.deliverRosMessageForTest(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
+        assertEquals("map", repo.mapData.value.frameId)
+        assertEquals(2, repo.mapData.value.width)
+    }
+
+    @Test
+    fun `connect and disconnect clear the previous map and odometry`() {
+        val repo = RobotRepository()
+        repo.deliverRosMessageForTest(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
+        repo.deliverRosMessageForTest(Constants.TOPIC_ODOM, odomMessage(x = 1.5, frameId = "odom"))
+        assertTrue(repo.mapData.value.cells.isNotEmpty())
+        assertEquals(1.5f, repo.odomData.value.x, 0.001f)
+
+        repo.connect("192.0.2.1", 9)
+        assertTrue(repo.mapData.value.cells.isEmpty())
+        assertEquals(0f, repo.odomData.value.x, 0.001f)
+        assertEquals("", repo.odomData.value.frameId)
+        assertEquals("", repo.mapData.value.frameId)
+
+        repo.deliverRosMessageForTest(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
+        assertEquals("map", repo.mapData.value.frameId)
+        assertTrue(repo.mapData.value.cells.isNotEmpty())
+
+        repo.disconnect()
+        assertTrue(repo.mapData.value.cells.isEmpty())
+        assertEquals(0f, repo.odomData.value.x, 0.001f)
     }
 
     @Test
@@ -114,4 +155,31 @@ class RobotRepositoryTest {
         assertEquals(63f, repo.homeTelemetry.value.batteryMainPct!!, 0.01f)
         assertTrue(repo.homeTelemetry.value.hasBatteryFromRos)
     }
+
+    private fun mapMessage(frameId: String) = mapOf(
+        "header" to mapOf("frame_id" to frameId),
+        "info" to mapOf(
+            "width" to 2,
+            "height" to 1,
+            "resolution" to 0.05,
+            "origin" to mapOf("position" to mapOf("x" to 0.0, "y" to 0.0)),
+        ),
+        "data" to listOf(0, 100),
+    )
+
+    private fun odomMessage(x: Double, frameId: String) = mapOf(
+        "header" to mapOf("frame_id" to frameId),
+        "pose" to mapOf(
+            "pose" to mapOf(
+                "position" to mapOf("x" to x, "y" to 0.0, "z" to 0.0),
+                "orientation" to mapOf("x" to 0.0, "y" to 0.0, "z" to 0.0, "w" to 1.0),
+            ),
+        ),
+        "twist" to mapOf(
+            "twist" to mapOf(
+                "linear" to mapOf("x" to 0.0, "y" to 0.0, "z" to 0.0),
+                "angular" to mapOf("x" to 0.0, "y" to 0.0, "z" to 0.0),
+            ),
+        ),
+    )
 }

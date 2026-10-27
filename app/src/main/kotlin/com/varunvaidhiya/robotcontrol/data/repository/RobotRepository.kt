@@ -31,6 +31,13 @@ class RobotRepository @Inject constructor() {
 
     private var rosManager: ROSBridgeManager? = null
 
+    /**
+     * Map and odometry belong to one connection. [connect] and [disconnect] bump
+     * this so a late message from the previous socket cannot restore the old grid.
+     */
+    private val mapOdomLock = Any()
+    private var mapOdomEpoch = 0
+
     // ── Connection ─────────────────────────────────────────────────────────────
     private val _connectionState = MutableStateFlow(ROSBridgeManager.ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ROSBridgeManager.ConnectionState> = _connectionState.asStateFlow()
@@ -107,7 +114,33 @@ class RobotRepository @Inject constructor() {
         }
 
         override fun onMessageReceived(topic: String, message: Map<String, Any>) {
-            handleMessage(topic, message)
+            handleMessage(topic, message, currentMapOdomEpoch())
+        }
+    }
+
+    /**
+     * Drops callbacks from a socket that is no longer the active connection.
+     * [epoch] is the map/odom session captured when that socket was opened.
+     */
+    private fun connectionListener(epoch: Int, isActive: () -> Boolean) = object : ROSBridgeListener {
+        override fun onConnected() {
+            if (!isActive() || !mapOdomEpochLive(epoch)) return
+            rosListener.onConnected()
+        }
+
+        override fun onDisconnected() {
+            if (!isActive()) return
+            rosListener.onDisconnected()
+        }
+
+        override fun onError(error: String) {
+            if (!isActive()) return
+            rosListener.onError(error)
+        }
+
+        override fun onMessageReceived(topic: String, message: Map<String, Any>) {
+            if (!mapOdomEpochLive(epoch)) return
+            handleMessage(topic, message, epoch)
         }
     }
 
@@ -115,13 +148,50 @@ class RobotRepository @Inject constructor() {
 
     fun connect(ip: String = Constants.DEFAULT_ROBOT_IP, port: Int = Constants.DEFAULT_ROSBRIDGE_PORT) {
         _robotStatus.value = _robotStatus.value.copy(ipAddress = ip, port = port)
-        rosManager?.disconnect()  // clean up previous manager if any
-        rosManager = ROSBridgeManager(rosBridgeUrl(ip, port), rosListener)
-        rosManager?.connect()
+        val epoch = invalidateMapAndOdom()
+        val previous = rosManager
+        var manager: ROSBridgeManager? = null
+        val listener = connectionListener(epoch) { manager != null && rosManager === manager }
+        val created = ROSBridgeManager(rosBridgeUrl(ip, port), listener)
+        manager = created
+        rosManager = created
+        previous?.disconnect()
+        created.connect()
         _connectionState.value = ROSBridgeManager.ConnectionState.CONNECTING
     }
 
-    fun disconnect() = rosManager?.disconnect()
+    fun disconnect() {
+        invalidateMapAndOdom()
+        rosManager?.disconnect()
+    }
+
+    /** Drop the previous robot's grid and pose before another session can publish. */
+    private fun invalidateMapAndOdom(): Int = synchronized(mapOdomLock) {
+        mapOdomEpoch += 1
+        _mapData.value = MapData()
+        _odomData.value = OdomData()
+        mapOdomEpoch
+    }
+
+    private fun currentMapOdomEpoch(): Int = synchronized(mapOdomLock) { mapOdomEpoch }
+
+    private fun mapOdomEpochLive(epoch: Int): Boolean = synchronized(mapOdomLock) {
+        epoch == mapOdomEpoch
+    }
+
+    private fun publishMap(epoch: Int, map: MapData) {
+        synchronized(mapOdomLock) {
+            if (epoch != mapOdomEpoch) return
+            _mapData.value = map
+        }
+    }
+
+    private fun publishOdom(epoch: Int, odom: OdomData) {
+        synchronized(mapOdomLock) {
+            if (epoch != mapOdomEpoch) return
+            _odomData.value = odom
+        }
+    }
 
     fun sendVelocity(command: VelocityCommand) =
         rosManager?.publish(Constants.TOPIC_CMD_VEL, command.toROSTwist())
@@ -211,11 +281,12 @@ class RobotRepository @Inject constructor() {
         }
     }
 
-    private fun handleMessage(topic: String, message: Map<String, Any>) {
+    private fun handleMessage(topic: String, message: Map<String, Any>, epoch: Int) {
+        if (!mapOdomEpochLive(epoch)) return
         try {
             when (topic) {
-                Constants.TOPIC_ODOM               -> parseOdom(message)
-                Constants.TOPIC_MAP                -> parseMap(message)
+                Constants.TOPIC_ODOM               -> parseOdom(message, epoch)
+                Constants.TOPIC_MAP                -> parseMap(message, epoch)
                 Constants.TOPIC_ARM_JOINT_STATES   -> parseArmJointStates(message)
                 Constants.TOPIC_MISSION_STATUS     -> parseMissionStatus(message)
                 Constants.TOPIC_POINT_CLOUD        -> parsePointCloud(message)
@@ -242,7 +313,9 @@ class RobotRepository @Inject constructor() {
     // ── Parsers ────────────────────────────────────────────────────────────────
 
     @Suppress("UNCHECKED_CAST")
-    private fun parseOdom(msg: Map<String, Any>) {
+    private fun parseOdom(msg: Map<String, Any>, epoch: Int) {
+        val header      = msg["header"] as? Map<String, Any>
+        val frameId     = header?.get("frame_id") as? String ?: ""
         val pose        = (msg["pose"] as? Map<String, Any>)?.get("pose")  as? Map<String, Any> ?: return
         val position    = pose["position"]    as? Map<String, Any> ?: return
         val orientation = pose["orientation"] as? Map<String, Any> ?: return
@@ -258,16 +331,21 @@ class RobotRepository @Inject constructor() {
         val qw  = (orientation["w"] as? Number)?.toDouble() ?: 1.0
         val yaw = atan2(2.0 * (qw * qz + qx * qy), 1.0 - 2.0 * (qy * qy + qz * qz)).toFloat()
 
-        _odomData.value = OdomData(
-            x  = x, y  = y, yaw = yaw,
-            vx = (linear["x"]  as? Number)?.toFloat() ?: 0f,
-            vy = (linear["y"]  as? Number)?.toFloat() ?: 0f,
-            vz = (angular["z"] as? Number)?.toFloat() ?: 0f
+        publishOdom(
+            epoch,
+            OdomData(
+                x = x, y = y, yaw = yaw,
+                vx = (linear["x"] as? Number)?.toFloat() ?: 0f,
+                vy = (linear["y"] as? Number)?.toFloat() ?: 0f,
+                vz = (angular["z"] as? Number)?.toFloat() ?: 0f,
+                frameId = frameId,
+            ),
         )
     }
 
-    private fun parseMap(msg: Map<String, Any>) {
-        _mapData.value = OccupancyGridParser.parse(msg) ?: return
+    private fun parseMap(msg: Map<String, Any>, epoch: Int) {
+        val parsed = OccupancyGridParser.parse(msg) ?: return
+        publishMap(epoch, parsed)
     }
 
     private fun parseMissionStatus(msg: Map<String, Any>) {
@@ -430,7 +508,7 @@ class RobotRepository @Inject constructor() {
 
     @VisibleForTesting
     internal fun deliverRosMessageForTest(topic: String, message: Map<String, Any>) {
-        handleMessage(topic, message)
+        handleMessage(topic, message, currentMapOdomEpoch())
     }
 
     @VisibleForTesting

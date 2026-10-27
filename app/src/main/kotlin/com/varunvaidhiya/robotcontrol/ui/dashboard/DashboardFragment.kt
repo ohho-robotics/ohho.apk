@@ -16,6 +16,7 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.varunvaidhiya.robotcontrol.R
+import com.varunvaidhiya.robotcontrol.data.models.MapData
 import com.varunvaidhiya.robotcontrol.data.models.OdomData
 import com.varunvaidhiya.robotcontrol.databinding.FragmentDashboardBinding
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
@@ -59,16 +60,27 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
     }
 
     /**
-     * Draw the latest occupancy grid and pose. Map updates are ignored while the
-     * overlay is hidden, so opening it must paint the values already held by the ViewModel.
+     * Draw the occupancy grid for the current connection. The overlay stays empty
+     * until that robot publishes a map. The pose is drawn only when its frame
+     * matches the grid (identity map←odom; this app does not apply TF).
      */
     private fun renderCurrentBev() {
         val map = dashboardViewModel.mapData.value
-        if (map.cells.isEmpty()) return
+        if (map.cells.isEmpty()) {
+            binding.bevSlamView.clearMap()
+            return
+        }
         binding.bevSlamView.updateMap(map.width, map.height, map.cells)
-        val odom = dashboardViewModel.odomData.value
-        val (px, py) = map.metersToPixel(odom.x, odom.y)
-        binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
+        showBevPose(map, dashboardViewModel.odomData.value)
+    }
+
+    private fun showBevPose(map: MapData, odom: OdomData) {
+        val pixels = map.posePixelsIfSameFrame(odom)
+        if (pixels == null) {
+            binding.bevSlamView.clearRobotPose()
+            return
+        }
+        binding.bevSlamView.updateRobotPose(pixels.first, pixels.second, odom.yaw)
     }
 
     private fun showFullscreenCamera() {
@@ -126,19 +138,20 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
                         updateOdomDisplay(odom)
                         val map = dashboardViewModel.mapData.value
                         if (bevVisible && map.cells.isNotEmpty()) {
-                            val (px, py) = map.metersToPixel(odom.x, odom.y)
-                            binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
+                            showBevPose(map, odom)
                         }
                     }
                 }
 
                 launch {
                     dashboardViewModel.mapData.collectLatest { map ->
-                        if (!bevVisible || map.cells.isEmpty()) return@collectLatest
+                        if (!bevVisible) return@collectLatest
+                        if (map.cells.isEmpty()) {
+                            binding.bevSlamView.clearMap()
+                            return@collectLatest
+                        }
                         binding.bevSlamView.updateMap(map.width, map.height, map.cells)
-                        val odom = dashboardViewModel.odomData.value
-                        val (px, py) = map.metersToPixel(odom.x, odom.y)
-                        binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
+                        showBevPose(map, dashboardViewModel.odomData.value)
                     }
                 }
 

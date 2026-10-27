@@ -99,8 +99,18 @@ class StubRosBridgeInstrumentedTest {
             assertTrue("first MJPEG part missing Content-Length", length != null && length > 0)
             val jpeg = source.readByteArray(length!!.toLong())
             assertTrue(partHeaders.contains("Content-Type: image/jpeg"))
-            val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
-            assertTrue("part payload is not a decodable JPEG", bitmap != null)
+            assertTrue(
+                "part payload is missing the JPEG start-of-image marker",
+                jpeg.size >= 2 &&
+                    jpeg[0] == 0xFF.toByte() &&
+                    jpeg[1] == 0xD8.toByte(),
+            )
+            val options = BitmapFactory.Options()
+            val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, options)
+            assertTrue(
+                "part payload is not a decodable JPEG (mime=${options.outMimeType})",
+                bitmap != null && options.outMimeType == "image/jpeg",
+            )
             bitmap?.recycle()
         }
     }
