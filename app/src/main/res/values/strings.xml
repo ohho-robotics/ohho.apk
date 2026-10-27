@@ -32,6 +32,7 @@
     <string name="mode_teleop">Teleop</string>
     <string name="mode_autonomous">Autonomous</string>
     <string name="mode_manual">Manual</string>
+    <string name="drone_teleop_refused">Aerial profile: /cmd_vel/teleop is off until a climb control or altitude-hold mode exists.</string>
 
     <!-- Dashboard -->
     <string name="motor_front_left">FL</string>

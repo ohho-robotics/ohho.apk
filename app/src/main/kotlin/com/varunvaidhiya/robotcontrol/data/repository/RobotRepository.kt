@@ -4,6 +4,8 @@ import com.varunvaidhiya.robotcontrol.data.models.*
 import com.varunvaidhiya.robotcontrol.data.ros.OccupancyGridParser
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeListener
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
+import com.varunvaidhiya.robotcontrol.safety.DroneTeleopGuard
+import com.varunvaidhiya.robotcontrol.safety.RobotTarget
 import com.varunvaidhiya.robotcontrol.ui.views.PointCloudView
 import com.varunvaidhiya.robotcontrol.utils.Constants
 import androidx.annotation.VisibleForTesting
@@ -30,6 +32,20 @@ class RobotRepository @Inject constructor() {
     }
 
     private var rosManager: ROSBridgeManager? = null
+
+    private val droneTeleopGuard = DroneTeleopGuard()
+    private var selectedTarget = RobotTarget()
+
+    private val _droneTeleopRefused = MutableStateFlow(false)
+    /** True when the selected profile or URI is aerial, so `/cmd_vel/teleop` is not published. */
+    val droneTeleopRefused: StateFlow<Boolean> = _droneTeleopRefused.asStateFlow()
+
+    /**
+     * Sink for `/cmd_vel/teleop`. Production uses [ROSBridgeManager.publish].
+     * Tests replace this so they can assert that a drone selection publishes nothing.
+     */
+    internal var cmdVelPublisher: (topic: String, message: Map<String, Any>) -> Unit =
+        { topic, message -> rosManager?.publish(topic, message) }
 
     /**
      * Map and odometry belong to one connection. [connect] and [disconnect] bump
@@ -149,6 +165,7 @@ class RobotRepository @Inject constructor() {
 
     fun connect(ip: String = Constants.DEFAULT_ROBOT_IP, port: Int = Constants.DEFAULT_ROSBRIDGE_PORT) {
         _robotStatus.value = _robotStatus.value.copy(ipAddress = ip, port = port)
+        if (blockDroneConnect(ip)) return
         val epoch = invalidateMapAndOdom()
         val previous = rosManager
         var manager: ROSBridgeManager? = null
@@ -159,6 +176,23 @@ class RobotRepository @Inject constructor() {
         previous?.disconnect()
         created.connect()
         _connectionState.value = ROSBridgeManager.ConnectionState.CONNECTING
+    }
+
+    /**
+     * Record the robot the operator selected. Replaces any previous selection.
+     * An aerial profile or drone URI makes [sendVelocity] publish nothing.
+     */
+    fun selectRobot(
+        profileId: String? = null,
+        transportUri: String? = null,
+        capabilities: Collection<String> = emptyList(),
+    ) {
+        selectedTarget = RobotTarget(
+            profileId = profileId?.trim()?.ifEmpty { null },
+            transportUri = transportUri?.trim()?.ifEmpty { null },
+            capabilities = capabilities.toSet(),
+        )
+        _droneTeleopRefused.value = droneTeleopGuard.refuses(teleopTarget())
     }
 
     fun disconnect() {
@@ -194,8 +228,40 @@ class RobotRepository @Inject constructor() {
         }
     }
 
-    fun sendVelocity(command: VelocityCommand) =
-        rosManager?.publish(Constants.TOPIC_CMD_VEL, command.toROSTwist())
+    /**
+     * A drone URI is not a ROSBridge address. Refuse teleop and skip the socket
+     * so the app does not dial a flight transport. Ground addresses are unchanged.
+     */
+    private fun blockDroneConnect(ip: String): Boolean {
+        val addressIsAerial = droneTeleopGuard.refuses(RobotTarget(transportUri = ip))
+        _droneTeleopRefused.value = addressIsAerial || droneTeleopGuard.refuses(teleopTarget())
+        if (!addressIsAerial) return false
+        invalidateMapAndOdom()
+        rosManager?.disconnect()
+        rosManager = null
+        _connectionState.value = ROSBridgeManager.ConnectionState.DISCONNECTED
+        return true
+    }
+
+    private fun teleopTarget(): RobotTarget {
+        val connectedUri = _robotStatus.value.ipAddress.trim().ifEmpty { null }
+        val connected = RobotTarget(transportUri = connectedUri)
+        if (droneTeleopGuard.refuses(selectedTarget)) return selectedTarget
+        if (droneTeleopGuard.refuses(connected)) return connected
+        val selectedExplicitly = selectedTarget.profileId != null ||
+            !selectedTarget.transportUri.isNullOrBlank() ||
+            selectedTarget.capabilities.isNotEmpty()
+        return if (selectedExplicitly) selectedTarget else connected
+    }
+
+    fun sendVelocity(command: VelocityCommand) {
+        // OHH-297: aerial targets publish nothing on /cmd_vel/teleop.
+        _droneTeleopRefused.value = !droneTeleopGuard.publishIfAllowed(
+            teleopTarget(),
+            command.toROSTwist(),
+            cmdVelPublisher,
+        )
+    }
 
     fun sendEmergencyStop() =
         rosManager?.publish(Constants.TOPIC_EMERGENCY_STOP, mapOf("data" to true))
