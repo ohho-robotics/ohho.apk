@@ -33,6 +33,34 @@ class OccupancyGridParserTest {
     }
 
     @Test
+    fun `rejects non-positive dimensions even when the cell count matches`() {
+        val zeroWidth = mapOf(
+            "info" to mapOf("width" to 0, "height" to 4, "resolution" to 0.05),
+            "data" to emptyList<Int>(),
+        )
+        assertNull(OccupancyGridParser.parse(zeroWidth))
+
+        val negative = mapOf(
+            "info" to mapOf("width" to -2, "height" to -2, "resolution" to 0.05),
+            "data" to listOf(0, 0, 0, 0),
+        )
+        assertNull(OccupancyGridParser.parse(negative))
+    }
+
+    @Test
+    fun `rejects dimensions whose product overflows Int`() {
+        val width = 65537
+        val height = 65537
+        val wrappedProduct = width * height
+        assertEquals(131073, wrappedProduct)
+        val msg = mapOf(
+            "info" to mapOf("width" to width, "height" to height, "resolution" to 0.05),
+            "data" to List(wrappedProduct) { 0 },
+        )
+        assertNull(OccupancyGridParser.parse(msg))
+    }
+
+    @Test
     fun `rejects grid when data length mismatches width times height`() {
         val msg = mapOf(
             "info" to mapOf("width" to 2, "height" to 2, "resolution" to 0.05),

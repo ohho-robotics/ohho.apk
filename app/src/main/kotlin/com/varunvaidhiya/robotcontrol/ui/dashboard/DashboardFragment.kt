@@ -24,7 +24,6 @@ import com.varunvaidhiya.robotcontrol.ui.common.BaseFragment
 import com.varunvaidhiya.robotcontrol.utils.Constants
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -107,19 +106,25 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
                 }
 
                 launch {
-                    combine(
-                        dashboardViewModel.odomData,
-                        dashboardViewModel.mapData,
-                    ) { odom, map -> odom to map }
-                        .collectLatest { (odom, map) ->
-                            updateChart(odom)
-                            updateOdomDisplay(odom)
-                            if (bevVisible && map.cells.isNotEmpty()) {
-                                binding.bevSlamView.updateMap(map.width, map.height, map.cells)
-                                val (px, py) = map.metersToPixel(odom.x, odom.y)
-                                binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
-                            }
+                    dashboardViewModel.odomData.collectLatest { odom ->
+                        updateChart(odom)
+                        updateOdomDisplay(odom)
+                        val map = dashboardViewModel.mapData.value
+                        if (bevVisible && map.cells.isNotEmpty()) {
+                            val (px, py) = map.metersToPixel(odom.x, odom.y)
+                            binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
                         }
+                    }
+                }
+
+                launch {
+                    dashboardViewModel.mapData.collectLatest { map ->
+                        if (!bevVisible || map.cells.isEmpty()) return@collectLatest
+                        binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+                        val odom = dashboardViewModel.odomData.value
+                        val (px, py) = map.metersToPixel(odom.x, odom.y)
+                        binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
+                    }
                 }
 
                 launch {

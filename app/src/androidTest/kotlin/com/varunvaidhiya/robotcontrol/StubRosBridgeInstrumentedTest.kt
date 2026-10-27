@@ -60,10 +60,28 @@ class StubRosBridgeInstrumentedTest {
             .build()
         client.newCall(request).execute().use { response ->
             assertTrue(response.isSuccessful)
-            val body = response.body?.bytes() ?: byteArrayOf()
-            val header = body.decodeToString(0, minOf(body.size, 512))
-            assertTrue(header.contains("Content-Type: image/jpeg"))
-            assertTrue(body.indexOf(0xFF.toByte()) >= 0 && body.indexOf(0xD8.toByte()) >= 0)
+            val source = response.body?.source() ?: error("missing body")
+            val partHeaders = StringBuilder()
+            var contentLength: Int? = null
+            while (true) {
+                val line = source.readUtf8Line() ?: break
+                if (line.isEmpty()) {
+                    if (contentLength != null) break
+                    continue
+                }
+                partHeaders.append(line).append('\n')
+                if (line.startsWith("Content-Length:", ignoreCase = true)) {
+                    contentLength = line.substringAfter(':').trim().toIntOrNull()
+                }
+            }
+            val length = contentLength
+            assertTrue("first MJPEG part missing Content-Length", length != null && length > 0)
+            val jpeg = source.readByteArray(length!!.toLong())
+            assertTrue(partHeaders.contains("Content-Type: image/jpeg"))
+            assertTrue(
+                "part payload is not a JPEG",
+                jpeg.size >= 2 && jpeg[0] == 0xFF.toByte() && jpeg[1] == 0xD8.toByte(),
+            )
         }
     }
 }

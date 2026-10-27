@@ -1,5 +1,6 @@
 package com.varunvaidhiya.robotcontrol.network
 
+import androidx.annotation.VisibleForTesting
 import com.google.gson.Gson
 import kotlinx.coroutines.*
 import okhttp3.*
@@ -118,6 +119,12 @@ class ROSBridgeManager(
         
         val json = gson.toJson(message)
         webSocket?.send(json)
+    }
+
+    @VisibleForTesting
+    internal fun attachSocketForTest(socket: WebSocket, state: ConnectionState) {
+        webSocket = socket
+        connectionState = state
     }
     
     /**

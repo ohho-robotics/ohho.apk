@@ -18,7 +18,10 @@ object OccupancyGridParser {
         val originX = (originPos?.get("x") as? Number)?.toFloat() ?: 0f
         val originY = (originPos?.get("y") as? Number)?.toFloat() ?: 0f
         val rawData = msg["data"] as? List<Number> ?: return null
-        if (rawData.size != width * height) return null
+        if (width <= 0 || height <= 0) return null
+        // Compare in Long so width*height cannot wrap (e.g. 65537*65537 -> 131073).
+        val cellCount = width.toLong() * height.toLong()
+        if (cellCount != rawData.size.toLong()) return null
         return MapData(
             width = width,
             height = height,

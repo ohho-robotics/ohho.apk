@@ -27,11 +27,6 @@ class RobotRepository @Inject constructor() {
     companion object {
         /** ROSBridge WebSocket URL opened by [connect]. */
         fun rosBridgeUrl(ip: String, port: Int): String = "ws://$ip:$port"
-
-        /** Captures outbound publishes in JVM unit tests (no socket required). */
-        @VisibleForTesting
-        @Volatile
-        var testPublishSink: ((String, Map<String, Any>) -> Unit)? = null
     }
 
     private var rosManager: ROSBridgeManager? = null
@@ -176,9 +171,7 @@ class RobotRepository @Inject constructor() {
 
     /** Publish a natural-language goal to /agent/goal (std_msgs/String). */
     fun sendAgentGoal(goal: String) {
-        val msg = mapOf("data" to goal)
-        testPublishSink?.invoke(Constants.TOPIC_AGENT_GOAL, msg)
-        rosManager?.publish(Constants.TOPIC_AGENT_GOAL, msg)
+        rosManager?.publish(Constants.TOPIC_AGENT_GOAL, mapOf("data" to goal))
     }
 
     /** Start rosbag2 recording (name without extension). */
@@ -428,6 +421,11 @@ class RobotRepository @Inject constructor() {
         rosManager?.callService(Constants.SERVICE_OTA_ROLLBACK_WORKSPACE) { result ->
             callback(result["success"] as? Boolean ?: false, result["message"] as? String ?: "")
         }
+    }
+
+    @VisibleForTesting
+    internal fun attachRosManagerForTest(manager: ROSBridgeManager) {
+        rosManager = manager
     }
 
     @VisibleForTesting
