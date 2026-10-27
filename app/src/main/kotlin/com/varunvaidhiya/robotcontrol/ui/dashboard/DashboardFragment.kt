@@ -52,8 +52,23 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
             bevVisible = !bevVisible
             binding.bevOverlayContainer.visibility = if (bevVisible) View.VISIBLE else View.GONE
             binding.btnBevToggle.alpha = if (bevVisible) 1f else 0.45f
+            // A map that arrived while the overlay was hidden is not re-emitted on open.
+            if (bevVisible) renderCurrentBev()
         }
         binding.btnFullscreen.setOnClickListener { showFullscreenCamera() }
+    }
+
+    /**
+     * Draw the latest occupancy grid and pose. Map updates are ignored while the
+     * overlay is hidden, so opening it must paint the values already held by the ViewModel.
+     */
+    private fun renderCurrentBev() {
+        val map = dashboardViewModel.mapData.value
+        if (map.cells.isEmpty()) return
+        binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+        val odom = dashboardViewModel.odomData.value
+        val (px, py) = map.metersToPixel(odom.x, odom.y)
+        binding.bevSlamView.updateRobotPose(px, py, odom.yaw)
     }
 
     private fun showFullscreenCamera() {

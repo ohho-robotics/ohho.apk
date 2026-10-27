@@ -1,5 +1,6 @@
 package com.varunvaidhiya.robotcontrol
 
+import android.graphics.BitmapFactory
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.WebSocket
@@ -60,7 +61,27 @@ class StubRosBridgeInstrumentedTest {
             .build()
         client.newCall(request).execute().use { response ->
             assertTrue(response.isSuccessful)
+            val contentType = response.header("Content-Type")
+            val boundary = multipartBoundary(contentType)
+            assertTrue(
+                "Content-Type is not multipart with a boundary: $contentType",
+                contentType?.contains("multipart/", ignoreCase = true) == true &&
+                    !boundary.isNullOrEmpty(),
+            )
             val source = response.body?.source() ?: error("missing body")
+            // MjpegView.readMjpegFrame only decodes a part that follows a "--boundary" line.
+            val boundaryMarker = "--$boundary"
+            var sawBoundary = false
+            var attempts = 0
+            while (attempts < 100 && !sawBoundary) {
+                val line = source.readUtf8Line() ?: break
+                attempts++
+                if (line.trim() == boundaryMarker) sawBoundary = true
+            }
+            assertTrue(
+                "body does not use the Content-Type boundary $boundaryMarker",
+                sawBoundary,
+            )
             val partHeaders = StringBuilder()
             var contentLength: Int? = null
             while (true) {
@@ -78,10 +99,26 @@ class StubRosBridgeInstrumentedTest {
             assertTrue("first MJPEG part missing Content-Length", length != null && length > 0)
             val jpeg = source.readByteArray(length!!.toLong())
             assertTrue(partHeaders.contains("Content-Type: image/jpeg"))
-            assertTrue(
-                "part payload is not a JPEG",
-                jpeg.size >= 2 && jpeg[0] == 0xFF.toByte() && jpeg[1] == 0xD8.toByte(),
-            )
+            val bitmap = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size)
+            assertTrue("part payload is not a decodable JPEG", bitmap != null)
+            bitmap?.recycle()
         }
+    }
+
+    /** Boundary parameter from a multipart Content-Type, or null when absent. */
+    private fun multipartBoundary(contentType: String?): String? {
+        if (contentType.isNullOrBlank()) return null
+        for (part in contentType.split(';')) {
+            val trimmed = part.trim()
+            val eq = trimmed.indexOf('=')
+            if (eq <= 0) continue
+            if (!trimmed.substring(0, eq).trim().equals("boundary", ignoreCase = true)) continue
+            var value = trimmed.substring(eq + 1).trim()
+            if (value.length >= 2 && value.first() == '"' && value.last() == '"') {
+                value = value.substring(1, value.length - 1)
+            }
+            return value.ifEmpty { null }
+        }
+        return null
     }
 }
