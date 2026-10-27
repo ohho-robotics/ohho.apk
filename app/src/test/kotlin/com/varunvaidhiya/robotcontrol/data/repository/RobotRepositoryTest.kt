@@ -41,6 +41,11 @@ class RobotRepositoryTest {
     }
 
     @Test
+    fun `arm joint commands publish on the teleop mux input`() {
+        assertEquals("/arm/joint_commands/teleop", Constants.TOPIC_ARM_JOINT_COMMANDS)
+    }
+
+    @Test
     fun `connect sets connecting state and endpoint on robot status`() {
         val repo = RobotRepository()
         assertEquals(ROSBridgeManager.ConnectionState.DISCONNECTED, repo.connectionState.value)

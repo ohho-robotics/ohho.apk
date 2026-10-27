@@ -25,7 +25,7 @@ The license badge matches `LICENSE` (Apache-2.0). CI runs `./gradlew assembleDeb
 | Dashboard chart and odometry | Values from `/odom` after a connection. Zeros until then. The motor tiles are labelled DEMO and are not wheel telemetry. |
 | Map, point cloud, 3D robot viewer | Views subscribe to `/map`, `/camera/depth/points`, `/odom`, and `/arm/joint_states`. The 3D tab looks for `robot.glb` in assets and shows a missing-model state when it is absent. |
 | AI chat | Sends text on `/ai/command` or `/mission/command` only while the socket is connected. The face animation (idle / processing / speaking) is a local timer, not a robot reply. |
-| Controls | Joystick and arm sliders publish `/cmd_vel/teleop`, `/control_mode`, and `/arm/joint_commands` when connected. |
+| Controls | Joystick and arm sliders publish `/cmd_vel/teleop`, `/control_mode`, and `/arm/joint_commands/teleop` when connected. |
 | Observability | HTTP clients for Prometheus, Loki, Alertmanager, and W&B, using the GPU IP and W&B fields from Settings. Empty when those services are not reachable. |
 | OTA | Calls ROS services `/ota/check`, `/ota/apply_workspace`, `/ota/apply_models`, and `/ota/rollback_workspace` when connected. |
 
