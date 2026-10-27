@@ -123,14 +123,14 @@ class RobotRepositoryTest {
     }
 
     @Test
-    fun `connect and disconnect clear the previous map and odometry`() {
+    fun `disconnect clears the previous map and odometry`() {
         val repo = RobotRepository()
         repo.deliverRosMessageForTest(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
         repo.deliverRosMessageForTest(Constants.TOPIC_ODOM, odomMessage(x = 1.5, frameId = "odom"))
         assertTrue(repo.mapData.value.cells.isNotEmpty())
         assertEquals(1.5f, repo.odomData.value.x, 0.001f)
 
-        repo.connect("192.0.2.1", 9)
+        repo.disconnect()
         assertTrue(repo.mapData.value.cells.isEmpty())
         assertEquals(0f, repo.odomData.value.x, 0.001f)
         assertEquals("", repo.odomData.value.frameId)
@@ -143,6 +143,19 @@ class RobotRepositoryTest {
         repo.disconnect()
         assertTrue(repo.mapData.value.cells.isEmpty())
         assertEquals(0f, repo.odomData.value.x, 0.001f)
+    }
+
+    @Test
+    fun `late message from a previous session is dropped`() {
+        val repo = RobotRepository()
+        val old = repo.connectionListener(0) { true }
+        old.onMessageReceived(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
+        assertEquals("map", repo.mapData.value.frameId)
+
+        repo.disconnect()
+        old.onMessageReceived(Constants.TOPIC_MAP, mapMessage(frameId = "map"))
+
+        assertTrue(repo.mapData.value.cells.isEmpty())
     }
 
     @Test

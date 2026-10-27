@@ -122,7 +122,8 @@ class RobotRepository @Inject constructor() {
      * Drops callbacks from a socket that is no longer the active connection.
      * [epoch] is the map/odom session captured when that socket was opened.
      */
-    private fun connectionListener(epoch: Int, isActive: () -> Boolean) = object : ROSBridgeListener {
+    @VisibleForTesting
+    internal fun connectionListener(epoch: Int, isActive: () -> Boolean) = object : ROSBridgeListener {
         override fun onConnected() {
             if (!isActive() || !mapOdomEpochLive(epoch)) return
             rosListener.onConnected()
