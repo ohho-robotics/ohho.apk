@@ -16,6 +16,7 @@ import com.github.mikephil.charting.data.Entry
 import com.github.mikephil.charting.data.LineData
 import com.github.mikephil.charting.data.LineDataSet
 import com.varunvaidhiya.robotcontrol.R
+import com.varunvaidhiya.robotcontrol.data.models.MapData
 import com.varunvaidhiya.robotcontrol.data.models.OdomData
 import com.varunvaidhiya.robotcontrol.databinding.FragmentDashboardBinding
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
@@ -52,8 +53,34 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
             bevVisible = !bevVisible
             binding.bevOverlayContainer.visibility = if (bevVisible) View.VISIBLE else View.GONE
             binding.btnBevToggle.alpha = if (bevVisible) 1f else 0.45f
+            // A map that arrived while the overlay was hidden is not re-emitted on open.
+            if (bevVisible) renderCurrentBev()
         }
         binding.btnFullscreen.setOnClickListener { showFullscreenCamera() }
+    }
+
+    /**
+     * Draw the occupancy grid for the current connection. The overlay stays empty
+     * until that robot publishes a map. The pose is drawn only when its frame
+     * matches the grid (identity map←odom; this app does not apply TF).
+     */
+    private fun renderCurrentBev() {
+        val map = dashboardViewModel.mapData.value
+        if (map.cells.isEmpty()) {
+            binding.bevSlamView.clearMap()
+            return
+        }
+        binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+        showBevPose(map, dashboardViewModel.odomData.value)
+    }
+
+    private fun showBevPose(map: MapData, odom: OdomData) {
+        val pixels = map.posePixelsIfSameFrame(odom)
+        if (pixels == null) {
+            binding.bevSlamView.clearRobotPose()
+            return
+        }
+        binding.bevSlamView.updateRobotPose(pixels.first, pixels.second, odom.yaw)
     }
 
     private fun showFullscreenCamera() {
@@ -88,15 +115,17 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
 
                 launch {
                     cameraViewModel.streamUrl.collectLatest { url ->
-                        binding.textLiveIndicator.text = "NO FEED"
-                        binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                         if (url.isNotEmpty()) {
+                            binding.textLiveIndicator.text = "CONNECTING…"
+                            binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                             binding.mjpegView.frameListener = {
                                 binding.textLiveIndicator.text = "● LIVE"
                                 binding.textLiveIndicator.setTextColor(Color.parseColor("#FF4444"))
                             }
                             binding.mjpegView.startStream(url)
                         } else {
+                            binding.textLiveIndicator.text = "CAMERA OFFLINE"
+                            binding.textLiveIndicator.setTextColor(Color.parseColor("#FFD700"))
                             binding.mjpegView.frameListener = null
                             binding.mjpegView.stopStream()
                         }
@@ -107,18 +136,22 @@ class DashboardFragment : BaseFragment<FragmentDashboardBinding>() {
                     dashboardViewModel.odomData.collectLatest { odom ->
                         updateChart(odom)
                         updateOdomDisplay(odom)
-                        // Mirror odom into the BEV map overlay
-                        if (bevVisible) {
-                            binding.bevSlamView.updateRobotPose(odom.x, odom.y, odom.yaw)
+                        val map = dashboardViewModel.mapData.value
+                        if (bevVisible && map.cells.isNotEmpty()) {
+                            showBevPose(map, odom)
                         }
                     }
                 }
 
                 launch {
                     dashboardViewModel.mapData.collectLatest { map ->
-                        if (map.cells.isNotEmpty() && bevVisible) {
-                            binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+                        if (!bevVisible) return@collectLatest
+                        if (map.cells.isEmpty()) {
+                            binding.bevSlamView.clearMap()
+                            return@collectLatest
                         }
+                        binding.bevSlamView.updateMap(map.width, map.height, map.cells)
+                        showBevPose(map, dashboardViewModel.odomData.value)
                     }
                 }
 

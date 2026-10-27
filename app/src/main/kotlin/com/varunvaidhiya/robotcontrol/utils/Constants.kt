@@ -23,6 +23,9 @@ object Constants {
     // Control mode for cmd_vel_mux ("nav2" | "vla" | "teleop" | "rl_nav")
     const val TOPIC_CONTROL_MODE       = "/control_mode"
 
+    // Agent goals (LangGraph / planner intake)
+    const val TOPIC_AGENT_GOAL         = "/agent/goal"        // std_msgs/String
+
     // Mission / AI orchestration
     const val TOPIC_MISSION_COMMAND    = "/mission/command"   // std_msgs/String
     const val TOPIC_VLA_PROMPT         = "/vla/prompt"        // std_msgs/String
@@ -36,14 +39,16 @@ object Constants {
     const val TOPIC_RECORD_START       = "/rosbag_recorder/start"  // std_msgs/String (bag name)
     const val TOPIC_RECORD_STOP        = "/rosbag_recorder/stop"   // std_msgs/Empty
 
-    // Arm topics
-    const val TOPIC_ARM_JOINT_COMMANDS = "/arm/joint_commands"
+    // Arm joint teleop. arm_cmd_mux forwards this only while /control_mode
+    // is "teleop" and /emergency_stop is false.
+    const val TOPIC_ARM_JOINT_COMMANDS = "/arm/joint_commands/teleop"
     const val TOPIC_ARM_ENABLE         = "/arm/enable"
 
     // ── ROS Topics: subscribe ─────────────────────────────────────────────────
     const val TOPIC_ODOM               = "/odom"
     const val TOPIC_MAP                = "/map"
     const val TOPIC_IMU                = "/imu/data"
+    const val TOPIC_BATTERY_STATE       = "/battery_state"
     const val TOPIC_DIAGNOSTICS        = "/diagnostics"
     const val TOPIC_ARM_JOINT_STATES   = "/arm/joint_states"
 

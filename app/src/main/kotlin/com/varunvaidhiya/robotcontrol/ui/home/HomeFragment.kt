@@ -15,10 +15,10 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.varunvaidhiya.robotcontrol.R
+import com.varunvaidhiya.robotcontrol.data.models.HomeTelemetry
 import com.varunvaidhiya.robotcontrol.databinding.FragmentHomeBinding
 import com.varunvaidhiya.robotcontrol.network.ROSBridgeManager
 import com.varunvaidhiya.robotcontrol.ui.common.BaseFragment
-import com.varunvaidhiya.robotcontrol.ui.dashboard.DashboardViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
@@ -28,10 +28,10 @@ import kotlin.random.Random
 @AndroidEntryPoint
 class HomeFragment : BaseFragment<FragmentHomeBinding>() {
 
-    private val viewModel: DashboardViewModel by viewModels()
+    private val viewModel: HomeViewModel by viewModels()
     private val handler = Handler(Looper.getMainLooper())
 
-    // Simulated metric state (real data would come from /diagnostics)
+    // Demo fallbacks when ROS topics are silent
     private var battMain = 78.2f
     private var battArm = 91.5f
     private var cores = floatArrayOf(42f, 58f, 28f, 45f)
@@ -44,6 +44,9 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     private var netUp = 1.2f
     private var netDown = 0.8f
     private var vlaLoad = 62f
+
+    private var rosTelemetry = HomeTelemetry()
+    private var liveJoints = false
 
     private val colorOk   = Color.parseColor("#00FF7F")
     private val colorWarn = Color.parseColor("#FFD700")
@@ -58,7 +61,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         setupObservers()
-        startSimulation()
+        startDemoTick()
     }
 
     private fun setupObservers() {
@@ -81,9 +84,31 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
                         }
                     }
                 }
+                launch {
+                    viewModel.homeTelemetry.collectLatest { telemetry ->
+                        rosTelemetry = telemetry
+                        updateMetricsBanner(telemetry)
+                        renderMetrics()
+                    }
+                }
+                launch {
+                    viewModel.armJointPositions.collectLatest { joints ->
+                        val connected =
+                            viewModel.connectionState.value == ROSBridgeManager.ConnectionState.CONNECTED
+                        liveJoints = connected && joints.any { it != 0.0 }
+                        if (liveJoints && joints.size >= 4) {
+                            binding.jointBase.text = fmtJoint(joints[0])
+                            binding.jointShld.text = fmtJoint(joints[1])
+                            binding.jointElbw.text = fmtJoint(joints[2])
+                            binding.jointWrst.text = fmtJoint(joints.getOrElse(3) { 0.0 })
+                        }
+                    }
+                }
             }
         }
     }
+
+    private fun fmtJoint(rad: Double) = String.format("%.2fr", rad)
 
     private fun onlineText(): String =
         if (endpointLabel.isEmpty()) "SYS: ONLINE" else "SYS: ONLINE · $endpointLabel"
@@ -105,11 +130,32 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         }
     }
 
-    private fun startSimulation() {
+    private fun updateMetricsBanner(telemetry: HomeTelemetry) {
+        val liveParts = buildList {
+            if (telemetry.hasBatteryFromRos) add("/battery_state")
+            if (telemetry.hasDiagnosticsFromRos) add("/diagnostics")
+        }
+        binding.homeRosNodes.text = when {
+            liveParts.isEmpty() -> "DEMO DATA"
+            else -> "LIVE: ${liveParts.joinToString(", ")}"
+        }
+        binding.homeMetricsBanner.text = when {
+            liveParts.isEmpty() ->
+                "DEMO DATA · battery, Pi, workstation and model load are simulated on the phone"
+            liveParts.size == 2 ->
+                "LIVE · battery and Pi metrics from ROS; workstation and model load are still DEMO"
+            telemetry.hasBatteryFromRos ->
+                "LIVE · main battery from /battery_state; other cards use DEMO until /diagnostics arrives"
+            else ->
+                "LIVE · partial metrics from /diagnostics; remaining cards are DEMO on the phone"
+        }
+    }
+
+    private fun startDemoTick() {
         val tick = object : Runnable {
             override fun run() {
                 if (!isAdded || _binding == null) return
-                tickMetrics()
+                tickDemoMetrics()
                 renderMetrics()
                 handler.postDelayed(this, 750L)
             }
@@ -117,15 +163,21 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         handler.post(tick)
     }
 
-    private fun tickMetrics() {
+    private fun tickDemoMetrics() {
         val r = Random.Default
-        battMain = (battMain - 0.01f).coerceIn(30f, 100f)
-        battArm  = (battArm  + r.nextFloat() * 0.04f - 0.02f).coerceIn(30f, 100f)
-        for (i in cores.indices) {
-            cores[i] = (cores[i] + r.nextFloat() * 10f - 5f).coerceIn(8f, 96f)
+        if (!rosTelemetry.hasBatteryFromRos) {
+            battMain = (battMain - 0.01f).coerceIn(30f, 100f)
+            battArm  = (battArm  + r.nextFloat() * 0.04f - 0.02f).coerceIn(30f, 100f)
+        } else if (rosTelemetry.batteryArmPct == null) {
+            battArm = (battArm + r.nextFloat() * 0.04f - 0.02f).coerceIn(30f, 100f)
         }
-        rpiTemp = (rpiTemp + r.nextFloat() * 0.8f - 0.38f).coerceIn(44f, 72f)
-        rpiRam  = (rpiRam  + r.nextFloat() * 0.08f - 0.04f).coerceIn(1f, 3.8f)
+        if (!rosTelemetry.hasDiagnosticsFromRos) {
+            for (i in cores.indices) {
+                cores[i] = (cores[i] + r.nextFloat() * 10f - 5f).coerceIn(8f, 96f)
+            }
+            rpiTemp = (rpiTemp + r.nextFloat() * 0.8f - 0.38f).coerceIn(44f, 72f)
+            rpiRam  = (rpiRam  + r.nextFloat() * 0.08f - 0.04f).coerceIn(1f, 3.8f)
+        }
         wsGpu   = (wsGpu   + r.nextFloat() * 14f - 7f).coerceIn(25f, 98f)
         wsVram  = (wsVram  + r.nextFloat() * 0.24f - 0.12f).coerceIn(2f, 7.8f)
         wsCpu   = (wsCpu   + r.nextFloat() * 12f - 6f).coerceIn(15f, 92f)
@@ -136,31 +188,39 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
     }
 
     private fun renderMetrics() {
-        // Battery
-        setBar(binding.barBattMain, binding.valBattMain, battMain / 100f, "${battMain.fmt()}%",
-            batteryColor(battMain))
-        setBar(binding.barBattArm,  binding.valBattArm,  battArm  / 100f, "${battArm.fmt()}%",
-            batteryColor(battArm))
+        val mainBatt = rosTelemetry.batteryMainPct ?: battMain
+        val armBatt  = rosTelemetry.batteryArmPct ?: battArm
 
-        // RPi cores
-        setBar(binding.barCore1, binding.valCore1, cores[0] / 100f, "${cores[0].roundToInt()}%", colorCyan)
-        setBar(binding.barCore2, binding.valCore2, cores[1] / 100f, "${cores[1].roundToInt()}%", colorCyan)
-        setBar(binding.barCore3, binding.valCore3, cores[2] / 100f, "${cores[2].roundToInt()}%", colorCyan)
-        setBar(binding.barCore4, binding.valCore4, cores[3] / 100f, "${cores[3].roundToInt()}%", colorCyan)
+        setBar(binding.barBattMain, binding.valBattMain, mainBatt / 100f, "${mainBatt.fmt()}%",
+            batteryColor(mainBatt))
+        setBar(binding.barBattArm,  binding.valBattArm,  armBatt  / 100f, "${armBatt.fmt()}%",
+            batteryColor(armBatt))
 
-        // RPi RAM
-        setBar(binding.barRpiRam, binding.valRpiRam, rpiRam / 4f, "${rpiRam.fmt()}/4.0 GB", colorCyan)
+        val coreLoads = rosTelemetry.rpiCoreLoads
+        if (coreLoads != null && coreLoads.size >= 4) {
+            setBar(binding.barCore1, binding.valCore1, coreLoads[0] / 100f, "${coreLoads[0].roundToInt()}%", colorCyan)
+            setBar(binding.barCore2, binding.valCore2, coreLoads[1] / 100f, "${coreLoads[1].roundToInt()}%", colorCyan)
+            setBar(binding.barCore3, binding.valCore3, coreLoads[2] / 100f, "${coreLoads[2].roundToInt()}%", colorCyan)
+            setBar(binding.barCore4, binding.valCore4, coreLoads[3] / 100f, "${coreLoads[3].roundToInt()}%", colorCyan)
+        } else {
+            setBar(binding.barCore1, binding.valCore1, cores[0] / 100f, "${cores[0].roundToInt()}%", colorCyan)
+            setBar(binding.barCore2, binding.valCore2, cores[1] / 100f, "${cores[1].roundToInt()}%", colorCyan)
+            setBar(binding.barCore3, binding.valCore3, cores[2] / 100f, "${cores[2].roundToInt()}%", colorCyan)
+            setBar(binding.barCore4, binding.valCore4, cores[3] / 100f, "${cores[3].roundToInt()}%", colorCyan)
+        }
 
-        // RPi temp
+        val ramGb = rosTelemetry.rpiRamUsedGb ?: rpiRam
+        setBar(binding.barRpiRam, binding.valRpiRam, ramGb / 4f, "${ramGb.fmt()}/4.0 GB", colorCyan)
+
+        val temp = rosTelemetry.rpiTempC ?: rpiTemp
         val tempColor = when {
-            rpiTemp > 65f -> colorErr
-            rpiTemp > 55f -> colorWarn
+            temp > 65f -> colorErr
+            temp > 55f -> colorWarn
             else          -> colorOk
         }
-        binding.valRpiTemp.text = "${rpiTemp.fmt()}°C"
+        binding.valRpiTemp.text = "${temp.fmt()}°C"
         binding.valRpiTemp.setTextColor(tempColor)
 
-        // Workstation
         val gpuColor = when {
             wsGpu > 85f -> colorErr
             wsGpu > 65f -> colorWarn
@@ -174,7 +234,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>() {
         binding.valNetUp.text   = "↑ ${netUp.fmt()} MB/s"
         binding.valNetDown.text = "↓ ${netDown.fmt()} MB/s"
 
-        // VLA
         setBar(binding.barVlaLoad, binding.valVlaLoad, vlaLoad / 100f, "${vlaLoad.roundToInt()}%", colorCyan2)
     }
 
