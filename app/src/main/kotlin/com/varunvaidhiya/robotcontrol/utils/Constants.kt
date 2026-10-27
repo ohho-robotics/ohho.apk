@@ -23,6 +23,9 @@ object Constants {
     // Control mode for cmd_vel_mux ("nav2" | "vla" | "teleop" | "rl_nav")
     const val TOPIC_CONTROL_MODE       = "/control_mode"
 
+    // Agent goals (LangGraph / planner intake)
+    const val TOPIC_AGENT_GOAL         = "/agent/goal"        // std_msgs/String
+
     // Mission / AI orchestration
     const val TOPIC_MISSION_COMMAND    = "/mission/command"   // std_msgs/String
     const val TOPIC_VLA_PROMPT         = "/vla/prompt"        // std_msgs/String

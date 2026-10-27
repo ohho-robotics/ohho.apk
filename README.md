@@ -21,10 +21,12 @@ The license badge matches `LICENSE` (Apache-2.0). CI runs `./gradlew assembleDeb
 | Connection dot | Green / amber / red from the ROSBridge socket state. |
 | Home battery and Pi cards | When ROSBridge is connected and the robot (or `tools/rosbridge_stub.py`) publishes `/battery_state` and `/diagnostics`, those cards show **live** values. Workstation and model load stay **demo** until wired. The banner labels LIVE vs DEMO. |
 | Home joint readout and empty 3D pane | Placeholders. `robot.glb` is not in this repo, and this screen does not load one. |
-| Dashboard camera | MJPEG from `http://<robot-ip>:8080/stream?topic=/camera/front/image_raw` only after the socket reports connected. The badge stays **NO FEED** until a JPEG frame arrives. |
+| Dashboard camera | MJPEG from `http://<robot-ip>:8080/stream?topic=/camera/front/image_raw` only after the socket reports connected. Badge **CAMERA OFFLINE** when disconnected, **CONNECTING…** until the first JPEG, then **● LIVE**. |
+| Map → 2D SLAM | Renders `/map` (occupancy grid) with robot pose from `/odom` (meters → map pixels). Placeholder until the first grid arrives. |
+| AI command box | Publishes the typed text to `/agent/goal` (std_msgs/String) while connected, plus existing `/ai/command` / `/mission/command` routing. |
 | Dashboard chart and odometry | Values from `/odom` after a connection. Zeros until then. The motor tiles are labelled DEMO and are not wheel telemetry. |
 | Map, point cloud, 3D robot viewer | Views subscribe to `/map`, `/camera/depth/points`, `/odom`, and `/arm/joint_states`. The 3D tab looks for `robot.glb` in assets and shows a missing-model state when it is absent. |
-| AI chat | Sends text on `/ai/command` or `/mission/command` only while the socket is connected. The face animation (idle / processing / speaking) is a local timer, not a robot reply. |
+| AI chat | Sends text on `/agent/goal`, `/ai/command`, or `/mission/command` only while the socket is connected. The face animation (idle / processing / speaking) is a local timer, not a robot reply. |
 | Controls | Joystick and arm sliders publish `/cmd_vel/teleop`, `/control_mode`, and `/arm/joint_commands/teleop` when connected. |
 | Observability | HTTP clients for Prometheus, Loki, Alertmanager, and W&B, using the GPU IP and W&B fields from Settings. Empty when those services are not reachable. |
 | OTA | Calls ROS services `/ota/check`, `/ota/apply_workspace`, `/ota/apply_models`, and `/ota/rollback_workspace` when connected. |
@@ -38,8 +40,7 @@ Not in this repository, and not claimed as working here:
 - TLS (`wss://`) for ROSBridge. The manifest allows cleartext traffic.
 - A checked-in `robot.glb`, URDF, or `tools/urdf_to_glb.py`.
 - Robot-side nodes (`rosbridge`, `web_video_server`, Nav2, camera, arm, OTA, Loki). This app only speaks to them.
-- Instrumented UI tests. Unit tests are `app/src/test` only.
-- Updated emulator screenshots after live-metrics UI (see `docs/OHH-38-human-todos.md`).
+- Updated emulator screenshots after live-metrics / camera UI (see `docs/OHH-38-human-todos.md`, `docs/OHH-61-human-todos.md`).
 
 ## Screenshots
 
@@ -91,6 +92,7 @@ The top bar, not the bottom bar, opens Settings and Observability.
 │       │   │   └── ui/                   # home, dashboard, mapping, slam, viewer,
 │       │   │                             # ai, controls, observability, ota, settings, views
 │       │   └── res/                      # layout, drawable, navigation, values
+│       ├── androidTest/                  # Stub smoke tests (@Ignore until host stub runs)
 │       └── test/                         # JVM unit tests
 ├── build.gradle.kts
 ├── gradle/wrapper/
@@ -136,7 +138,7 @@ pip install -r tools/requirements-stub.txt
 python tools/rosbridge_stub.py --port 9090
 ```
 
-The stub publishes synthetic `/battery_state`, `/diagnostics`, and `/odom`. It does not replace a real robot stack.
+The stub publishes synthetic `/battery_state`, `/diagnostics`, `/odom`, and `/map`, logs inbound `/agent/goal` messages, and serves MJPEG on port **8080** (`/stream?topic=…`). It does not replace a real robot stack. See `docs/OHH-61-human-todos.md` for emulator checks.
 
 ## License
 

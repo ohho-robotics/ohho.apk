@@ -7,6 +7,7 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import com.varunvaidhiya.robotcontrol.data.models.occupancyBitmapIndex
 import timber.log.Timber
 
 /**
@@ -24,6 +25,7 @@ class SlamMapView @JvmOverloads constructor(
     private var robotPoseX = 0f
     private var robotPoseY = 0f
     private var robotYaw = 0f
+    private var robotVisible = false
     
     // Viewport Transformation
     private var scaleFactor = 1.0f
@@ -61,9 +63,12 @@ class SlamMapView @JvmOverloads constructor(
         }
         
         val pixels = IntArray(width * height)
-        for (i in data.indices) {
+        // Grid row 0 is the map origin row. Place it at the bottom so it matches
+        // MapData.metersToPixel, which flips Y.
+        val count = minOf(data.size, width * height)
+        for (i in 0 until count) {
             val cell = data[i]
-            pixels[i] = when(cell) {
+            pixels[occupancyBitmapIndex(i, width, height)] = when(cell) {
                 -1 -> Color.GRAY         // Unknown
                 100 -> Color.BLACK      // Occupied
                 else -> Color.WHITE     // Free (0-99)
@@ -81,6 +86,20 @@ class SlamMapView @JvmOverloads constructor(
         robotPoseX = x
         robotPoseY = y
         robotYaw = yaw
+        robotVisible = true
+        postInvalidate()
+    }
+
+    /** Hide the pose marker without changing the occupancy bitmap. */
+    fun clearRobotPose() {
+        robotVisible = false
+        postInvalidate()
+    }
+
+    /** Drop the grid and pose so a new connection cannot keep the previous robot's map. */
+    fun clearMap() {
+        mapBitmap = null
+        robotVisible = false
         postInvalidate()
     }
 
@@ -100,19 +119,22 @@ class SlamMapView @JvmOverloads constructor(
             canvas.drawBitmap(it, 0f, 0f, mapPaint)
         }
         
-        // Draw Robot (Triangle)
-        canvas.save()
-        canvas.translate(robotPoseX, robotPoseY)
-        canvas.rotate(Math.toDegrees(robotYaw.toDouble()).toFloat())
-        
-        val path = android.graphics.Path()
-        path.moveTo(10f, 0f)    // Nose
-        path.lineTo(-5f, 5f)    // Left back
-        path.lineTo(-5f, -5f)   // Right back
-        path.close()
-        canvas.drawPath(path, robotPaint)
-        
-        canvas.restore()
+        // Draw Robot (Triangle). Hidden until a same-frame pose is published.
+        if (robotVisible) {
+            canvas.save()
+            canvas.translate(robotPoseX, robotPoseY)
+            // ROS yaw is counterclockwise about +Z. The bitmap has +Y up, and canvas
+            // rotation is clockwise, so the displayed heading is negated.
+            canvas.rotate(-Math.toDegrees(robotYaw.toDouble()).toFloat())
+
+            val path = android.graphics.Path()
+            path.moveTo(10f, 0f)    // Nose
+            path.lineTo(-5f, 5f)    // Left back
+            path.lineTo(-5f, -5f)   // Right back
+            path.close()
+            canvas.drawPath(path, robotPaint)
+            canvas.restore()
+        }
         canvas.restore()
         
         // Debug Info
